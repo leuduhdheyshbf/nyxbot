@@ -1,26 +1,21 @@
 #!/bin/bash
 
-echo "🔧 Instalando dependências do sistema..."
+echo "🔧 Baixando dependências externas..."
 
-# Atualiza a lista de pacotes e instala os programas essenciais
-apt-get update
-apt-get install -y \
-  yt-dlp \
-  ffmpeg \
-  wget \
-  curl \
-  git \
-  build-essential \
-  python3 \
-  python3-pip
+# 1. Baixar yt-dlp (para download de vídeos/músicas)
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp
+chmod +x yt-dlp
+echo "✅ yt-dlp baixado!"
 
-echo "✅ Dependências do sistema instaladas!"
+# 2. Baixar ffmpeg (para converter áudio/vídeo, stickers, tomp3, etc.)
+curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o ffmpeg.tar.xz
+tar -xf ffmpeg.tar.xz
+mv ffmpeg-*/ffmpeg ./ffmpeg
+rm -rf ffmpeg-* ffmpeg.tar.xz
+chmod +x ffmpeg
+echo "✅ ffmpeg baixado!"
 
-# (Opcional) Baixa o yt-dlp manualmente se o apt não tiver a versão mais recente
-# curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp
-# chmod +x yt-dlp
-
+# 3. Instalar dependências do Node.js
 echo "🚀 Instalando dependências do Node.js..."
 yarn --frozen-lockfile install
-
 echo "✅ Build concluído com sucesso!"
