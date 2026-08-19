@@ -3,7 +3,8 @@
 const yts = require('yt-search');
 const axios = require('axios');
 
-const RAPID_API_KEY = "6497388db0sh304dcb3481c5238p1091a7jsn85b65d43c96d";
+// Lê a chave do ambiente (Render) ou usa fallback
+const RAPID_API_KEY = process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "6497388db0sh304dcb3481c5238p1091a7jsn85b65d43c96d";
 const RAPID_API_HOST = "youtube-mp4-mp3-downloader.p.rapidapi.com";
 const BASE_URL = `https://${RAPID_API_HOST}/api/v1`;
 
@@ -17,6 +18,10 @@ module.exports = {
     const q = (args || []).join(' ').trim();
     if (!q) {
       return reply(`❗ Digite o nome ou link da música.\nEx: ${prefix || '.'}play nome da musica`);
+    }
+
+    if (!RAPID_API_KEY || RAPID_API_KEY.length < 20) {
+      return reply('❌ Chave da RapidAPI não configurada. Defina RAPIDAPI_KEY no ambiente.');
     }
 
     try {
@@ -61,14 +66,14 @@ module.exports = {
         return reply('❌ A API não retornou o ID de progresso.');
       }
 
-      // 2. Loop para verificar o progresso com o while
+      // 2. Loop para verificar o progresso
       let downloadUrl = null;
       let attempts = 0;
-      const maxAttempts = 15; // Evita loop infinito (aprox. 45 segundos)
+      const maxAttempts = 15; // ~45 segundos
 
       while (!downloadUrl && attempts < maxAttempts) {
         attempts++;
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Aguarda 3 segundos
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         const progressRes = await axios.get(`${BASE_URL}/progress?id=${progressId}`, options);
         const status = progressRes.data;
@@ -89,7 +94,6 @@ module.exports = {
 
       await reply('📥 Baixando arquivo convertido para enviar...');
 
-      // Baixa o arquivo final via axios como arraybuffer
       const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
       const audioBuffer = Buffer.from(audioResponse.data);
 
@@ -115,8 +119,9 @@ module.exports = {
       );
 
     } catch (e) {
-      console.error('[play Axios Erro]', e);
-      reply(`❌ Erro ao processar: ${e.message}`);
+      console.error('[play Axios Erro]', e?.response?.data || e.message);
+      const msg = e?.response?.data?.message || e.message || 'Erro desconhecido';
+      reply(`❌ Erro ao processar: ${msg}`);
     }
   }
 };
