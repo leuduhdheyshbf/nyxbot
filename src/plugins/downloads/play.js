@@ -27,9 +27,12 @@ const proxies = [
 "http://Chinaproxys:cpaproxys@85.198.45.232:6156"
 ];
 
+let proxyIndex = 0;
+
 function escolherProxy() {
-  const indice = Math.floor(Math.random() * proxies.length);
-  return proxies[indice];
+  const proxy = proxies[proxyIndex];
+  proxyIndex = (proxyIndex + 1) % proxies.length;
+  return proxy;
 }
 
 function run(cmd, timeout = 150000) {
@@ -53,7 +56,7 @@ function hasValidCookies() {
 
 module.exports = {
   name: 'play',
-  description: 'Baixa áudio do YouTube com proxy e conversão MP3',
+  description: 'Baixa áudio do YouTube com fallback de proxies e formatos',
   category: 'downloads',
   aliases: ['ytmp3', 'musica', 'song'],
 
@@ -93,65 +96,96 @@ module.exports = {
         const outFile = path.join(tmpdir(), `${id}.mp3`)
         const rawFile = path.join(tmpdir(), `${id}.raw`)
 
-        const proxyEscolhido = escolherProxy();
-      const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
-      const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
+        const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
+        const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
 
-      // Baixa o melhor formato de áudio disponível, independente do formato
-      const downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio" ${common} -o "${rawFile}" "${video.url}"`
+        let success = false;
+        let tentativas = 0;
+        let lastError = null;
 
-      await run(downloadCmd)
+        while (!success && tentativas < proxies.length) {
+          const proxyEscolhido = escolherProxy();
+          tentativas++;
 
-      // Procura o arquivo baixado (pode ser m4a, webm, opus, etc.)
-      const files = fs.readdirSync(tmpdir())
-      const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000)
+          try {
+            console.log(`[play] Tentativa ${tentativas} com proxy ${proxyEscolhido}`);
 
-      if (!downloadedFile) {
-        return reply('❌ Não foi possível baixar o áudio.')
-      }
+            // Tenta baixar o melhor áudio
+            let downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio/best" ${common} -o "${rawFile}" "${video.url}"`;
+            await run(downloadCmd);
 
-      const downloadedPath = path.join(tmpdir(), downloadedFile)
+            // Se funcionou, verifica o arquivo
+            const files = fs.readdirSync(tmpdir());
+            const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000);
+            if (downloadedFile) {
+              success = true;
+              break;
+            }
+          } catch (e) {
+            lastError = e;
+            console.log(`[play] Proxy ${proxyEscolhido} falhou: ${e.message}`);
+            // Não faz nada, tenta o próximo
+          }
+        }
 
-      // Converte para MP3 usando ffmpeg
-      await run(`${FFMPEG} -y -i "${downloadedPath}" -vn -ab 128k "${outFile}"`, 60000)
+        // Se nenhum proxy funcionou, tenta fallback com formato 18 (vídeo 360p)
+        if (!success) {
+          console.log('[play] Todos os proxies falharam. Tentando fallback com formato 18...');
+          const proxyEscolhido = escolherProxy();
+          const downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "18" ${common} -o "${rawFile}" "${video.url}"`;
+          await run(downloadCmd);
+          success = true;
+        }
 
-      try { fs.unlinkSync(downloadedPath) } catch {}
+        // Verifica se o arquivo foi baixado
+        const files = fs.readdirSync(tmpdir());
+        const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000);
+        if (!downloadedFile) {
+          return reply('❌ Não foi possível baixar o áudio com nenhum proxy ou fallback.');
+        }
 
-      if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
-        return reply('❌ Erro ao converter para MP3.')
-      }
+        const downloadedPath = path.join(tmpdir(), downloadedFile);
 
-      const buf = fs.readFileSync(outFile)
-      const safeTitle = String(video.title || 'audio')
-      .replace(/[^\w\s.-]/g, '')
-      .slice(0, 60)
+        // Converte para MP3 usando ffmpeg
+        await run(`${FFMPEG} -y -i "${downloadedPath}" -vn -ab 128k "${outFile}"`, 60000);
 
-      await client.sendMessage(
-        from,
-        {
-          audio: buf,
-          mimetype: 'audio/mpeg',
-          fileName: `${safeTitle}.mp3`,
-          ptt: false
-        },
-        { quoted: info }
-      )
+        try { fs.unlinkSync(downloadedPath) } catch {}
 
-      await client.sendMessage(
-        from,
-        {
-          text:
-          `🎵 *${video.title || 'Música'}*\n` +
-          `⏱️ ${video.timestamp || '—'}\n` +
-          `⚡ Baixado e convertido com sucesso!`
-        },
-        { quoted: info }
-      )
+        if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
+          return reply('❌ Erro ao converter para MP3.');
+        }
 
-      try { fs.unlinkSync(outFile) } catch {}
+        const buf = fs.readFileSync(outFile);
+        const safeTitle = String(video.title || 'audio')
+        .replace(/[^\w\s.-]/g, '')
+        .slice(0, 60);
+
+        await client.sendMessage(
+          from,
+          {
+            audio: buf,
+            mimetype: 'audio/mpeg',
+            fileName: `${safeTitle}.mp3`,
+            ptt: false
+          },
+          { quoted: info }
+        );
+
+        await client.sendMessage(
+          from,
+          {
+            text:
+            `🎵 *${video.title || 'Música'}*\n` +
+            `⏱️ ${video.timestamp || '—'}\n` +
+            `⚡ Baixado e convertido com sucesso!`
+          },
+          { quoted: info }
+        );
+
+        try { fs.unlinkSync(outFile) } catch {}
     } catch (e) {
-      console.error('[play]', e)
-      reply(`❌ Erro ao baixar: ${e.message}`)
+      console.error('[play]', e);
+      reply(`❌ Erro ao baixar: ${e.message}`);
     }
   }
-}
+};

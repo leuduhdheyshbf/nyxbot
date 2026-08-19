@@ -1,22 +1,44 @@
-COMO APLICAR NO NYX BOT V2
-==========================
+COMO APLICAR — FIX GIFs (sem botão de baixar)
+============================================
 
-1. Extraia este zip DENTRO da pasta do bot (nyx-bot-v2), ou copie os arquivos:
+Problema: GIFs apareciam como arquivo pra baixar no WhatsApp Web.
+Causa: envio por URL remota ou GIF cru (sem converter pra MP4).
 
-   cp -r src/utils/reactions.js  CAMINHO_DO_BOT/src/utils/
-   cp -r src/plugins/cmds-aleatorios/*.js  CAMINHO_DO_BOT/src/plugins/cmds-aleatorios/
-   cp src/plugins/adulto/pack.js  CAMINHO_DO_BOT/src/plugins/adulto/
+Solução neste reactions.js:
+- Baixa o media como Buffer
+- Converte GIF/WebP → MP4 (ffmpeg, H.264, max 480px, 8s)
+- Envia SÓ buffer com video + gifPlayback: true
+- NUNCA envia { url } (isso gerava o botão de download)
 
-2. Remova o .dono:
-   mv CAMINHO_DO_BOT/src/plugins/dono/dono.js CAMINHO_DO_BOT/backups/ 2>/dev/null
+APLICAR (escolha 1):
+---------------------
+# Na pasta do bot (onde está src/plugins):
+mkdir -p src/utils
+cp /caminho/para/reactions.js  src/utils/reactions.js
 
-3. Commit e push:
-   cd CAMINHO_DO_BOT
-   git add -A
-   git commit -m "fix: reações em GIF animado + remove dono/menu18"
-   git push
+# Ou extraia o zip inteiro por cima do bot:
+# unzip -o nyx-gif-reactions-fix.zip
 
-Arquivos incluídos:
-- src/utils/reactions.js          (GIF em .beijo .abraco .tapa etc)
-- src/plugins/cmds-aleatorios/    (hugimg kissimg dance cry wave wink happy patimg)
-- src/plugins/adulto/pack.js      (sem .menu18)
+OBRIGATÓRIO depois de copiar:
+-----------------------------
+1. Confirme que o arquivo existe:
+   ls -la src/utils/reactions.js
+   # deve ter "toMp4" e "gifPlayback" dentro:
+   grep -c toMp4 src/utils/reactions.js
+
+2. Confirme ffmpeg no servidor:
+   which ffmpeg
+   # se não tiver: sudo apt install ffmpeg   (ou pacman -S ffmpeg)
+
+3. REINICIE o bot por completo (pm2 restart / systemctl / matar e subir de novo)
+   Só recarregar plugin às vezes NÃO pega o utils novo.
+
+4. Teste:
+   .beijo @alguem
+   .abraco @alguem
+
+No log do bot você deve ver algo como:
+  [reactions] baixou 1234567 bytes | gif=true ...
+  [reactions] convertido 1234567 → mp4 234567 bytes
+
+Se aparecer "ffmpeg falhou", instale/corrija o ffmpeg e reinicie de novo.
