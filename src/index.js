@@ -13,6 +13,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const express = require('express')
 
 const ROOT = path.join(__dirname, '..')
 const configPath = path.join(ROOT, 'config', 'config.json')
@@ -54,6 +55,22 @@ setInterval(() => {
 
 process.on('uncaughtException', (err) => RedLog(`Uncaught: ${err.message}`))
 process.on('unhandledRejection', (r) => RedLog(`Unhandled: ${r}`))
+
+// ============================================
+// SERVIDOR HTTP PARA O RENDER
+// ============================================
+const app = express()
+const PORT = process.env.PORT || 8080
+
+app.get('/', (req, res) => {
+  res.send('Nyx Bot V2 Online!')
+})
+
+// Inicia o servidor HTTP
+app.listen(PORT, () => {
+  console.log(`✅ Servidor HTTP rodando na porta ${PORT}`)
+})
+// ============================================
 
 async function main() {
   CyanLog('🩸 Nyx Bot V2 iniciando...')
