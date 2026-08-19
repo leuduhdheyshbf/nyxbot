@@ -1,0 +1,74 @@
+{
+  "5491123141622@s.whatsapp.net": {
+    "jid": "5491123141622@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 23,
+    "level": 4,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787087160182
+  },
+  "148756980842568@s.whatsapp.net": {
+    "jid": "148756980842568@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 90,
+    "level": 1,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787092791043
+  },
+  "556198711355@s.whatsapp.net": {
+    "jid": "556198711355@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 75,
+    "level": 1,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787092958324
+  },
+  "559484369410@s.whatsapp.net": {
+    "jid": "559484369410@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 95,
+    "level": 1,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787093102764
+  },
+  "5522998990549@s.whatsapp.net": {
+    "jid": "5522998990549@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 15,
+    "level": 2,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787093602859
+  },
+  "5522992376950@s.whatsapp.net": {
+    "jid": "5522992376950@s.whatsapp.net",
+    "nome": "",
+    "coins": 0,
+    "xp": 10,
+    "level": 1,
+    "daily": 0,
+    "wins": 0,
+    "losses": 0,
+    "achievements": [],
+    "createdAt": 1787101700242
+  }
+}
