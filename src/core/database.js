@@ -5,6 +5,19 @@ const path = require('path')
 const { ensureDir } = require('../utils/helpers')
 const { CyanLog, RedLog } = require('./logger')
 
+// ============================================
+// SUPABASE (APENAS PARA GRUPOS ATIVOS)
+// ============================================
+const { createClient } = require('@supabase/supabase-js')
+
+const supabaseUrl = process.env.SUPABASE_URL || 'https://nzcdwfktdtvfxtfsapon.supabase.co'
+const supabaseKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_jmFRjEk6sWWNy6JoNVLM0Q_dNhrnu2T'
+const supabase = createClient(supabaseUrl, supabaseKey)
+
+// ============================================
+// JSON LOCAL (PARA O RESTO DOS DADOS)
+// ============================================
+
 const ROOT = path.join(__dirname, '..', '..')
 const DB_DIR = path.join(ROOT, 'database', 'json')
 const BACKUP_DIR = path.join(ROOT, 'database', 'backups')
@@ -29,7 +42,6 @@ const DEFAULTS = {
   autoreply: {},
   badwords: { enabled: {}, words: [] },
   achievements: {},
-  groups: {},
   prefixos_grupo: {}
 }
 
@@ -44,19 +56,19 @@ function filePath(name) {
 
 function load(name) {
   if (store[name]) return store[name]
-  const fp = filePath(name)
-  try {
-    if (fs.existsSync(fp)) {
-      store[name] = JSON.parse(fs.readFileSync(fp, 'utf8'))
-    } else {
+    const fp = filePath(name)
+    try {
+      if (fs.existsSync(fp)) {
+        store[name] = JSON.parse(fs.readFileSync(fp, 'utf8'))
+      } else {
+        store[name] = JSON.parse(JSON.stringify(DEFAULTS[name] ?? {}))
+        fs.writeFileSync(fp, JSON.stringify(store[name], null, 2))
+      }
+    } catch (e) {
+      RedLog(`DB load ${name}: ${e.message}`)
       store[name] = JSON.parse(JSON.stringify(DEFAULTS[name] ?? {}))
-      fs.writeFileSync(fp, JSON.stringify(store[name], null, 2))
     }
-  } catch (e) {
-    RedLog(`DB load ${name}: ${e.message}`)
-    store[name] = JSON.parse(JSON.stringify(DEFAULTS[name] ?? {}))
-  }
-  return store[name]
+    return store[name]
 }
 
 function markDirty(name) {
@@ -82,14 +94,16 @@ function backup(name) {
   try {
     const src = filePath(name)
     if (!fs.existsSync(src)) return
-    const dest = path.join(BACKUP_DIR, `${name}-${Date.now()}.json`)
-    fs.copyFileSync(src, dest)
+      const dest = path.join(BACKUP_DIR, `${name}-${Date.now()}.json`)
+      fs.copyFileSync(src, dest)
   } catch (e) {
     RedLog(`Backup ${name}: ${e.message}`)
   }
 }
 
-// --- API de alto nível ---
+// ============================================
+// API DE ALTO NÍVEL (JSON)
+// ============================================
 
 function getUser(jid) {
   const users = load('users')
@@ -133,8 +147,8 @@ function getPremium() {
 
 function isPremium(jid, donoList = []) {
   if (donoList.some((d) => d === jid || cleanMatch(d, jid))) return true
-  const p = load('premium')
-  return (p.users || []).includes(jid)
+    const p = load('premium')
+    return (p.users || []).includes(jid)
 }
 
 function cleanMatch(a, b) {
@@ -198,72 +212,74 @@ process.on('SIGINT', () => {
   process.exit(0)
 })
 
+// ============================================
+// SUPABASE: ATIVAÇÃO DE GRUPOS
+// ============================================
 
-// --- Aluguel / ativação de grupos (30 dias) ---
+async function getGroupSupabase(groupId) {
+  const { data, error } = await supabase
+  .from('active_groups')
+  .select('*')
+  .eq('group_id', groupId)
+  .maybeSingle()
 
-function getGroups() {
-  return load('groups')
-}
-
-function getGroup(groupId) {
-  const groups = load('groups')
-  return groups[groupId] || null
-}
-
-/**
- * Ativa ou renova o grupo por N dias (padrão 30).
- * @returns {{ active: boolean, expires: number, days: number }}
- */
-function activateGroup(groupId, days = 30, activatedBy = null) {
-  const groups = load('groups')
-  const d = Math.max(1, Math.min(3650, Number(days) || 30))
-  const expires = Date.now() + d * 24 * 60 * 60 * 1000
-  groups[groupId] = {
-    active: true,
-    expires,
-    activatedAt: Date.now(),
-    activatedBy: activatedBy || null,
-    days: d
+  if (error) {
+    console.error('[Supabase] Erro ao buscar grupo:', error)
+    return null
   }
-  markDirty('groups')
-  return groups[groupId]
+  return data
 }
 
-function deactivateGroup(groupId) {
-  const groups = load('groups')
-  if (!groups[groupId]) return false
-  groups[groupId].active = false
-  markDirty('groups')
-  return true
+async function activateGroupSupabase(groupId, days = 30) {
+  const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000
+
+  const { data, error } = await supabase
+  .from('active_groups')
+  .upsert({
+    group_id: groupId,
+    active: true,
+    expires_at: expiresAt
+  }, { onConflict: 'group_id' })
+  .select()
+  .single()
+
+  if (error) {
+    console.error('[Supabase] Erro ao ativar grupo:', error)
+    return null
+  }
+  return data
 }
 
-/**
- * true se o grupo pode usar o bot.
- * Grupos nunca cadastrados = inativos (precisa ativar).
- * Dono bypassa no handler.
- */
-function isGroupActive(groupId) {
-  const g = getGroup(groupId)
-  if (!g) return false
-  if (!g.active) return false
-  if (g.expires && Date.now() > g.expires) {
-    g.active = false
-    markDirty('groups')
+async function deactivateGroupSupabase(groupId) {
+  const { error } = await supabase
+  .from('active_groups')
+  .update({ active: false })
+  .eq('group_id', groupId)
+
+  if (error) {
+    console.error('[Supabase] Erro ao desativar grupo:', error)
     return false
   }
   return true
 }
 
-function listActiveGroups() {
-  const groups = load('groups')
-  const now = Date.now()
-  return Object.entries(groups)
-    .filter(([, g]) => g.active && (!g.expires || g.expires > now))
-    .map(([id, g]) => ({ id, ...g }))
+async function isGroupActiveSupabase(groupId) {
+  const group = await getGroupSupabase(groupId)
+  if (!group) return false
+    if (!group.active) return false
+      if (group.expires_at && Date.now() > group.expires_at) {
+        await deactivateGroupSupabase(groupId)
+        return false
+      }
+      return true
 }
 
+// ============================================
+// EXPORTAÇÃO (Mantém compatibilidade com JSON)
+// ============================================
 
 module.exports = {
+  // JSON
   load,
   markDirty,
   flush,
@@ -280,11 +296,10 @@ module.exports = {
   setGroupPrefix,
   getMutes,
   getWarns,
-  getGroups,
-  getGroup,
-  activateGroup,
-  deactivateGroup,
-  isGroupActive,
-  listActiveGroups,
+  // Supabase (grupos)
+  getGroup: getGroupSupabase,
+  activateGroup: activateGroupSupabase,
+  deactivateGroup: deactivateGroupSupabase,
+  isGroupActive: isGroupActiveSupabase,
   DB_DIR
 }

@@ -205,7 +205,7 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                   if (ctx.isGroup && !ctx.isDono) {
                     const allowAlways = new Set(['dono', 'meuid', 'ping'])
                     const cmdKey = (cmd.originalName || cmd.name || '').toLowerCase()
-                    if (!allowAlways.has(cmdKey) && !db.isGroupActive(ctx.from)) {
+                    if (!allowAlways.has(cmdKey) && !(await db.isGroupActive(ctx.from))) {
                       await ctx.reply(
                         '⛔ *Bot não ativo neste grupo.*\n\n' +
                         'Peça ao dono para ativar com:\n' +
