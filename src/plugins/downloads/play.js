@@ -12,6 +12,25 @@ const COOKIES = path.join(ROOT, 'cookies.txt')
 const YTDLP = path.join(ROOT, 'yt-dlp')
 const BIN = fs.existsSync(YTDLP) ? `./yt-dlp` : 'yt-dlp'
 
+// Lista de proxies (formato já testado)
+const proxies = [
+  "http://Chinaproxys:cpaproxys@92.112.175.210:6483",
+"http://Chinaproxys:cpaproxys@45.38.89.51:5986",
+"http://Chinaproxys:cpaproxys@23.26.154.40:6777",
+"http://Chinaproxys:cpaproxys@23.26.154.215:6952",
+"http://Chinaproxys:cpaproxys@92.112.175.3:6276",
+"http://Chinaproxys:cpaproxys@185.72.240.6:7042",
+"http://Chinaproxys:cpaproxys@23.129.252.220:6488",
+"http://Chinaproxys:cpaproxys@85.198.47.157:6425",
+"http://Chinaproxys:cpaproxys@85.198.47.98:6366",
+"http://Chinaproxys:cpaproxys@85.198.45.232:6156"
+];
+
+function escolherProxy() {
+  const indice = Math.floor(Math.random() * proxies.length);
+  return proxies[indice];
+}
+
 function run(cmd, timeout = 150000) {
   return new Promise((resolve, reject) => {
     exec(cmd, { timeout, maxBuffer: 20 * 1024 * 1024, cwd: ROOT }, (err, stdout, stderr) => {
@@ -33,7 +52,7 @@ function hasValidCookies() {
 
 module.exports = {
   name: 'play',
-  description: 'Baixa áudio do YouTube (modo rápido)',
+  description: 'Baixa áudio do YouTube (modo rápido com proxy)',
   category: 'downloads',
   aliases: ['ytmp3', 'musica', 'song'],
 
@@ -70,49 +89,49 @@ module.exports = {
         await reply(`⬇️ Baixando: *${video.title || 'música'}*...`)
 
         const id = crypto.randomBytes(8).toString('hex')
-        const outFile = path.join(tmpdir(), `${id}.m4a`) // Baixa em M4A (formato nativo do YouTube)
+        const outFile = path.join(tmpdir(), `${id}.m4a`)
 
-        const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
-        const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
+        const proxyEscolhido = escolherProxy();
+      const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
+      const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
 
-        // Comando ultra rápido: baixa o melhor áudio em formato M4A (sem conversão)
-        const cmd = `${BIN} -f "bestaudio[ext=m4a]/bestaudio" ${common} -o "${outFile}" "${video.url}"`
+      // Comando ultra rápido com proxy
+      const cmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio[ext=m4a]/bestaudio" ${common} -o "${outFile}" "${video.url}"`
 
-        await run(cmd)
+      await run(cmd)
 
-        if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
-          return reply('❌ Não foi possível baixar o áudio.')
-        }
+      if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
+        return reply('❌ Não foi possível baixar o áudio.')
+      }
 
-        const buf = fs.readFileSync(outFile)
-        const safeTitle = String(video.title || 'audio')
-        .replace(/[^\w\s.-]/g, '')
-        .slice(0, 60)
+      const buf = fs.readFileSync(outFile)
+      const safeTitle = String(video.title || 'audio')
+      .replace(/[^\w\s.-]/g, '')
+      .slice(0, 60)
 
-        // Envia como MP4 (WhatsApp aceita M4A como MP4)
-        await client.sendMessage(
-          from,
-          {
-            audio: buf,
-            mimetype: 'audio/mp4', // WhatsApp aceita M4A com esse mimetype
-            fileName: `${safeTitle}.m4a`,
-            ptt: false
-          },
-          { quoted: info }
-        )
+      await client.sendMessage(
+        from,
+        {
+          audio: buf,
+          mimetype: 'audio/mp4',
+          fileName: `${safeTitle}.m4a`,
+          ptt: false
+        },
+        { quoted: info }
+      )
 
-        await client.sendMessage(
-          from,
-          {
-            text:
-            `🎵 *${video.title || 'Música'}*\n` +
-            `⏱️ ${video.timestamp || '—'}\n` +
-            `⚡ Modo Rápido`
-          },
-          { quoted: info }
-        )
+      await client.sendMessage(
+        from,
+        {
+          text:
+          `🎵 *${video.title || 'Música'}*\n` +
+          `⏱️ ${video.timestamp || '—'}\n` +
+          `⚡ Modo Rápido`
+        },
+        { quoted: info }
+      )
 
-        try { fs.unlinkSync(outFile) } catch {}
+      try { fs.unlinkSync(outFile) } catch {}
     } catch (e) {
       console.error('[play]', e)
       reply(`❌ Erro ao baixar: ${e.message}`)
