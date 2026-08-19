@@ -1,16 +1,16 @@
-'use strict';
+'use strict'
 
 const yts = require('yt-search');
 const axios = require('axios');
 
 // Lê a chave do ambiente (Render) ou usa fallback
 const RAPID_API_KEY = process.env.RAPIDAPI_KEY || process.env.RAPID_API_KEY || "6497388db0sh304dcb3481c5238p1091a7jsn85b65d43c96d";
-const RAPID_API_HOST = "youtube-mp310.p.rapidapi.com";
-const BASE_URL = `https://${RAPID_API_HOST}`;
+const RAPID_API_HOST = "youtube-mp4-mp3-downloader.p.rapidapi.com";
+const BASE_URL = `https://${RAPID_API_HOST}/api/v1`;
 
 module.exports = {
   name: 'play',
-  description: 'Baixa áudio do YouTube usando a API RapidAPI (youtube-mp310)',
+  description: 'Baixa áudio do YouTube usando a API da Opachi com Axios',
   category: 'downloads',
   aliases: ['ytmp3', 'musica', 'song'],
 
@@ -28,51 +28,68 @@ module.exports = {
       await reply('🔎 Procurando...');
 
       let video;
-      let videoUrl = null;
+      let videoId = null;
 
       if (/youtube\.com|youtu\.be/i.test(q)) {
-        let videoId = null;
         if (q.includes('v=')) videoId = q.split('v=')[1]?.split('&')[0];
         else videoId = q.split('/').pop()?.split('?')[0];
 
         if (videoId) {
           const r = await yts({ videoId });
           video = r.videos?.[0] || (r.title ? r : null);
-          videoUrl = video?.url || q;
-        } else {
-          videoUrl = q;
-          const r = await yts(q);
-          video = r.videos?.[0];
         }
       } else {
         const r = await yts(q);
         video = r.videos?.[0];
-        videoUrl = video?.url;
+        if (video?.url) {
+          if (video.url.includes('v=')) videoId = video.url.split('v=')[1]?.split('&')[0];
+          else videoId = video.url.split('/').pop()?.split('?')[0];
+        }
       }
 
-      if (!videoUrl) return reply('❌ Nada encontrado. Tente outro nome ou link.');
+      if (!video?.url || !videoId) return reply('❌ Nada encontrado. Tente outro nome ou link.');
 
-      await reply(`⬇️ Baixando conversão: *${video?.title || 'música'}*...`);
+      await reply(`⬇️ Iniciando conversão: *${video.title || 'música'}*...`);
 
       const options = {
-        method: 'GET',
-        url: `${BASE_URL}/download/mp3`,
-        params: { url: videoUrl },
         headers: {
           'x-rapidapi-key': RAPID_API_KEY,
           'x-rapidapi-host': RAPID_API_HOST
         }
       };
 
-      // Requisição direta para a nova API
-      const response = await axios.request(options);
-      const data = response.data;
+      // 1. Iniciar o processo de download
+      const startRes = await axios.get(`${BASE_URL}/download?id=${videoId}&format=mp3`, options);
+      const progressId = startRes.data.id || startRes.data.progressId;
 
-      // Extrai o link de download direto retornado pela API
-      const downloadUrl = data.link || data.download || data.url || (data.result && data.result.url);
+      if (!progressId) {
+        return reply('❌ A API não retornou o ID de progresso.');
+      }
+
+      // 2. Loop para verificar o progresso
+      let downloadUrl = null;
+      let attempts = 0;
+      const maxAttempts = 15; // ~45 segundos
+
+      while (!downloadUrl && attempts < maxAttempts) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        const progressRes = await axios.get(`${BASE_URL}/progress?id=${progressId}`, options);
+        const status = progressRes.data;
+
+        console.log(`[Opachi Tentativa ${attempts}]:`, status);
+
+        if (status.status === 'completed' || status.downloadUrl || status.link || status.url) {
+          downloadUrl = status.downloadUrl || status.link || status.url || (status.result && status.result.url);
+          break;
+        } else if (status.status === 'error') {
+          throw new Error("Erro no processamento da API.");
+        }
+      }
 
       if (!downloadUrl) {
-        return reply('❌ A API não retornou o link de download direto.');
+        return reply('❌ O tempo limite de conversão esgotou.');
       }
 
       await reply('📥 Baixando arquivo convertido para enviar...');
@@ -80,7 +97,7 @@ module.exports = {
       const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
       const audioBuffer = Buffer.from(audioResponse.data);
 
-      const safeTitle = String(video?.title || 'audio').replace(/[^\w\s.-]/g, '').slice(0, 60);
+      const safeTitle = String(video.title || 'audio').replace(/[^\w\s.-]/g, '').slice(0, 60);
 
       await client.sendMessage(
         from,
@@ -96,7 +113,7 @@ module.exports = {
       await client.sendMessage(
         from,
         {
-          text: `🎵 *${video?.title || 'Música'}*\n⏱️ ${video?.timestamp || '—'}\n⚡ Processado via YouTube MP3 (RapidAPI)!`
+          text: `🎵 *${video.title || 'Música'}*\n⏱️ ${video.timestamp || '—'}\n⚡ Processado via Opachi & Axios!`
         },
         { quoted: info }
       );
