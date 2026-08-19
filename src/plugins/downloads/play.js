@@ -2,7 +2,6 @@
 
 const yts = require('yt-search');
 
-// SUA CHAVE DO RAPIDAPI
 const RAPID_API_KEY = "6497388db0sh304dcb3481c5238p1091a7jsn85b65d43c96d";
 const RAPID_API_HOST = "youtube-mp3-audio-video-downloader.p.rapidapi.com";
 
@@ -21,7 +20,6 @@ module.exports = {
     try {
       await reply('🔎 Procurando...');
 
-      // 1. Busca o vídeo no YouTube usando yt-search
       let video;
       if (/youtube\.com|youtu\.be/i.test(q)) {
         let videoId = null;
@@ -41,9 +39,8 @@ module.exports = {
 
       await reply(`⬇️ Baixando: *${video.title || 'música'}*...\n⏳ Processando via RapidAPI.`);
 
-      // 2. Faz a requisição para a API do RapidAPI para pegar o link de download direto do MP3
-      // Nota: Ajuste o endpoint caso a sua API use uma URL ligeiramente diferente na documentação dela
-      const apiUrl = `https://${RAPID_API_HOST}/dl?id=${encodeURIComponent(video.url)}`;
+      // Testando a rota padrão com o parâmetro 'url'
+      const apiUrl = `https://${RAPID_API_HOST}/dl?url=${encodeURIComponent(video.url)}`;
 
       const apiResponse = await fetch(apiUrl, {
         method: "GET",
@@ -54,26 +51,23 @@ module.exports = {
       });
 
       const data = await apiResponse.json();
-      console.log("[RapidAPI Resposta]:", JSON.stringify(data));
+      console.log("[RapidAPI Resposta Completa]:", JSON.stringify(data, null, 2));
 
-      // Tenta extrair o link de download dependendo de como a API retorna o JSON
-      const downloadUrl = data.link || data.url || data.download || (data.result && data.result.url);
+      // Procura o link em várias propriedades comuns de APIs do RapidAPI
+      const downloadUrl = data.link || data.url || data.download || (data.result && data.result.url) || (data.data && data.data.dl);
 
       if (!downloadUrl) {
-        return reply('❌ A API não conseguiu gerar o link de áudio para este vídeo.');
+        return reply('❌ A API recusou o link. Veja os logs do Render para analisar o formato retornado.');
       }
 
-      // 3. Baixa o arquivo MP3 direto para a memória do bot (Buffer)
       const audioResponse = await fetch(downloadUrl);
       if (!audioResponse.ok) throw new Error('Falha ao baixar o arquivo da URL gerada.');
 
       const arrayBuffer = await audioResponse.arrayBuffer();
       const audioBuffer = Buffer.from(arrayBuffer);
 
-      // Nome limpo para o arquivo
       const safeTitle = String(video.title || 'audio').replace(/[^\w\s.-]/g, '').slice(0, 60);
 
-      // 4. Envia o áudio para o WhatsApp
       await client.sendMessage(
         from,
         {
