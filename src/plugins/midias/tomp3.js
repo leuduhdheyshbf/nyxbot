@@ -25,7 +25,7 @@ module.exports = {
       const tmpOut = path.join(tmpdir(), Crypto.randomBytes(6).toString('hex') + '.mp3')
       fs.writeFileSync(tmpIn, buffer)
       await new Promise((res, rej) => {
-        exec(`ffmpeg -i "${tmpIn}" -vn -ab 128k "${tmpOut}"`, e => e ? rej(e) : res())
+        exec(`./ffmpeg -i "${tmpIn}" -vn -ab 128k "${tmpOut}"`, e => e ? rej(e) : res())
       })
       await nyx.sendMessage(from, {
         audio: fs.readFileSync(tmpOut),

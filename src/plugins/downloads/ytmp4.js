@@ -30,7 +30,7 @@ module.exports = {
       const outFile = path.join(tmpdir(), `${Crypto.randomBytes(6).toString('hex')}.mp4`)
 
       await new Promise((resolve, reject) => {
-        exec(`yt-dlp -f "bv*[height<=480]+ba/b[height<=480]" --merge-output-format mp4 -o "${outFile}" "${video.url}"`, (err) => err ? reject(err) : resolve())
+        exec(`./yt-dlp -f "bv*[height<=480]+ba/b[height<=480]" --merge-output-format mp4 -o "${outFile}" "${video.url}"`, (err) => err ? reject(err) : resolve())
       })
 
       if (!fs.existsSync(outFile)) return reply('❌ Erro no download. Instale yt-dlp no sistema.')

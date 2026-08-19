@@ -63,7 +63,7 @@ Não baixa OnlyFans, Fansly nem paywall.`
 
       // Qualidade limitada pra caber no WhatsApp (~50MB)
       const cmd = [
-        'yt-dlp',
+        './yt-dlp',
         '--no-playlist',
         '-f', '"bv*[height<=480]+ba/b[height<=480]/b"',
         '--merge-output-format', 'mp4',
@@ -114,7 +114,7 @@ Não baixa OnlyFans, Fansly nem paywall.`
       console.error('[xxx]', e?.message || e)
       await reagir('❌')
       const msg = String(e?.message || e)
-      if (msg.includes('yt-dlp') || msg.includes('not found') || msg.includes('não encontrado')) {
+      if (msg.includes('./yt-dlp') || msg.includes('not found') || msg.includes('não encontrado')) {
         return reply('❌ *yt-dlp* não está instalado.\n\nNo CachyOS:\n`sudo pacman -S yt-dlp`')
       }
       reply('❌ Falha no download.\nLink privado, expirado ou site não suportado.')

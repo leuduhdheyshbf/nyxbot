@@ -28,7 +28,7 @@ module.exports = {
         ? `-filter_complex "[0:v]setpts=${1/speed}*PTS[v];[0:a]atempo=${speed}[a]" -map "[v]" -map "[a]"`
         : `-filter:a "atempo=${speed}"`
       await new Promise((res,rej)=>{
-        exec(`ffmpeg -i "${tmpIn}" ${filter} "${tmpOut}"`, e=>e?rej(e):res())
+        exec(`./ffmpeg -i "${tmpIn}" ${filter} "${tmpOut}"`, e=>e?rej(e):res())
       })
       if (isVid) {
         await nyx.sendMessage(from, { video: fs.readFileSync(tmpOut), caption: `⚡ ${speed}x` }, { quoted: info })

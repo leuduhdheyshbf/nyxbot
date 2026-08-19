@@ -180,13 +180,13 @@ async function svgToPng(svgPath, pngPath) {
   // force fundo opaco, sem transparência preta
   try {
     await run(
-      `ffmpeg -y -f lavfi -i "color=c=${''}" 2>/dev/null; ` +
-      `ffmpeg -y -background "${arguments[2] || 'white'}" -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`
+      `./ffmpeg -y -f lavfi -i "color=c=${''}" 2>/dev/null; ` +
+      `./ffmpeg -y -background "${arguments[2] || 'white'}" -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`
     )
   } catch {}
   if (fs.existsSync(pngPath)) return
   try {
-    await run(`ffmpeg -y -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`)
+    await run(`./ffmpeg -y -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`)
   } catch {}
   if (fs.existsSync(pngPath)) return
   await run(`convert "${svgPath}" -resize 512x512! -background none "${pngPath}"`)
@@ -305,13 +305,13 @@ Ex:
         const bg = opts.bg || '#8CCC03'
         try {
           await run(
-            `ffmpeg -y -f lavfi -i "color=c=${bg.replace('#', '0x')}:s=512x512:d=0.05" -i "${svgPath}" ` +
+            `./ffmpeg -y -f lavfi -i "color=c=${bg.replace('#', '0x')}:s=512x512:d=0.05" -i "${svgPath}" ` +
             `-filter_complex "[0][1]overlay=0:0" -frames:v 1 "${pngPath}"`
           )
         } catch {}
         if (!fs.existsSync(pngPath)) {
           try {
-            await run(`ffmpeg -y -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`)
+            await run(`./ffmpeg -y -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`)
           } catch {}
         }
         if (!fs.existsSync(pngPath)) {
@@ -335,7 +335,7 @@ Ex:
 
       // webp animado, loop, SEM padding preto (já é 512x512 rgb)
       await run(
-        `ffmpeg -y -framerate ${fps} -i "${path.join(workDir, 'f%03d.png')}" ` +
+        `./ffmpeg -y -framerate ${fps} -i "${path.join(workDir, 'f%03d.png')}" ` +
         `-vf "scale=512:512:flags=lanczos:force_original_aspect_ratio=disable" ` +
         `-loop 0 -an -c:v libwebp -quality 90 -compression_level 4 "${webpPath}"`
       )

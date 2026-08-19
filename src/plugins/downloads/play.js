@@ -67,11 +67,11 @@ module.exports = {
       const baseOpts = `-x --audio-format mp3 --audio-quality 0 --no-playlist --no-warnings ${cookieArg}`
 
       try {
-        await run(`yt-dlp ${baseOpts} -o "${outFile}" "${video.url}"`)
+        await run(`./yt-dlp ${baseOpts} -o "${outFile}" "${video.url}"`)
       } catch (e1) {
         // fallback sem quality 0
         try {
-          await run(`yt-dlp -x --audio-format mp3 --audio-quality 128K --no-playlist ${cookieArg} -o "${outFile}" "${video.url}"`)
+          await run(`./yt-dlp -x --audio-format mp3 --audio-quality 128K --no-playlist ${cookieArg} -o "${outFile}" "${video.url}"`)
         } catch (e2) {
           const msg = String(e2.stderr || e2.message || '')
           if (/403|forbidden|sign in|login/i.test(msg)) {
