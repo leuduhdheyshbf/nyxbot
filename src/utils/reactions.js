@@ -2,6 +2,7 @@
 
 /**
  * Busca imagens/GIFs de reação em APIs públicas (sem API key).
+ * Envia como GIF animado no WhatsApp (video + gifPlayback).
  * Retorna array de URLs (1 a 3).
  */
 
@@ -90,6 +91,10 @@ const ENDPOINTS = {
   ],
   smile: [
     'https://api.waifu.pics/sfw/smile'
+  ],
+  cry: [
+    'https://api.waifu.pics/sfw/cry',
+    'https://nekos.life/api/v2/img/cry'
   ]
 }
 
@@ -99,6 +104,15 @@ function extractUrl(data) {
   if (typeof data.link === 'string') return data.link
   if (data.images?.[0]?.url) return data.images[0].url
   return null
+}
+
+/**
+ * Detecta se a URL parece ser GIF animado
+ */
+function isLikelyGif(url) {
+  if (!url) return false
+  const u = url.toLowerCase()
+  return u.includes('.gif') || u.includes('gif') || u.includes('waifu.pics')
 }
 
 /**
@@ -128,18 +142,47 @@ async function fetchReactionImages(action, count = 1) {
   return urls
 }
 
-/** Envia 1–3 imagens no chat com caption na primeira */
+/**
+ * Envia 1–3 reações no chat como GIF animado (quando possível).
+ * Usa video + gifPlayback para animar no WhatsApp.
+ */
 async function sendReactionImages(client, from, info, urls, caption, mentions = []) {
   if (!urls.length) throw new Error('Nenhuma imagem encontrada')
 
   for (let i = 0; i < urls.length; i++) {
-    const payload = {
-      image: { url: urls[i] },
-      ...(i === 0
-        ? { caption, ...(mentions.length ? { mentions } : {}) }
-        : {})
+    const url = urls[i]
+    const isFirst = i === 0
+    const extra = isFirst
+      ? { caption, ...(mentions.length ? { mentions } : {}) }
+      : {}
+
+    // Preferir GIF animado via video + gifPlayback
+    // Fallback para image se a URL não for gif
+    let payload
+    if (isLikelyGif(url)) {
+      payload = {
+        video: { url },
+        gifPlayback: true,
+        ...extra
+      }
+    } else {
+      payload = {
+        image: { url },
+        ...extra
+      }
     }
-    await client.sendMessage(from, payload, i === 0 ? { quoted: info } : undefined)
+
+    try {
+      await client.sendMessage(from, payload, isFirst ? { quoted: info } : undefined)
+    } catch (err) {
+      // Fallback: se video falhar, tenta como image
+      console.error('[reactions] video/gif falhou, tentando image:', err.message)
+      await client.sendMessage(
+        from,
+        { image: { url }, ...extra },
+        isFirst ? { quoted: info } : undefined
+      )
+    }
   }
 }
 

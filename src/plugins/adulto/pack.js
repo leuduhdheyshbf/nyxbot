@@ -6,11 +6,23 @@ module.exports = {
   async execute({ reply, command }) {
     if (command === 'only') {
       return reply(
-`⚠️ *OnlyFans / Fansly / Privacy*\n\nO bot *não baixa* conteúdo pago nem contorna paywall.\n\nUse:\n• .xxx <link público free>\n• .nsfw (imagens free)\n• .menu18`
+`⚠️ *OnlyFans / Fansly / Privacy*
+
+O bot *não baixa* conteúdo pago nem contorna paywall.
+
+Use:
+• .xxx <link público free>
+• .nsfw (imagens free)`
       )
     }
     await reply(
-`📦 *Packs*\n\nNão hospedamos packs.\nPra vídeo free use:\n*.xxx <link do site free>*\n\nExemplos de site free: xnxx, xvideos, spankbang...\n\n*.menu18* — ver tudo +18`
+`📦 *Packs*
+
+Não hospedamos packs.
+Pra vídeo free use:
+*.xxx <link do site free>*
+
+Exemplos de site free: xnxx, xvideos, spankbang...`
     )
   }
 }

@@ -1,0 +1,34 @@
+=== Fix Binaries Path - qua 19 ago 2026 14:13:10 -03 ===
+Projeto: /home/lcsx/Downloads/nyx-bot-v2
+Plugins: /home/lcsx/Downloads/nyx-bot-v2/src/plugins
+
+Arquivos candidatos encontrados: 8
+  ✅ Modificado: src/plugins/midias/tomp3.js
+  ✅ Modificado: src/plugins/midias/stickertexto.js
+  ✅ Modificado: src/plugins/midias/acelerar.js
+  ✅ Modificado: src/plugins/midias/volume.js
+  ✅ Modificado: src/plugins/downloads/play.js
+  ✅ Modificado: src/plugins/downloads/xxx.js
+  ✅ Modificado: src/plugins/downloads/ytmp4.js
+  ✅ Modificado: src/plugins/cmds-aleatorios/stickertexto.js
+
+========================================
+Resumo:
+  Arquivos modificados : 8
+  Arquivos ignorados   : 0
+  Backup em            : /home/lcsx/Downloads/nyx-bot-v2/backups/plugins-binaries-20260819-141310
+  Log                  : /home/lcsx/Downloads/nyx-bot-v2/fix-binaries-path.log
+========================================
+
+Plugins modificados (teste estes):
+  - src/plugins/midias/tomp3.js
+  - src/plugins/midias/stickertexto.js
+  - src/plugins/midias/acelerar.js
+  - src/plugins/midias/volume.js
+  - src/plugins/downloads/play.js
+  - src/plugins/downloads/xxx.js
+  - src/plugins/downloads/ytmp4.js
+  - src/plugins/cmds-aleatorios/stickertexto.js
+
+Para reverter, copie de volta os arquivos do backup:
+  cp -a "/home/lcsx/Downloads/nyx-bot-v2/backups/plugins-binaries-20260819-141310/src/plugins/." "/home/lcsx/Downloads/nyx-bot-v2/src/plugins/"

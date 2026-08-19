@@ -1,0 +1,22 @@
+COMO APLICAR NO NYX BOT V2
+==========================
+
+1. Extraia este zip DENTRO da pasta do bot (nyx-bot-v2), ou copie os arquivos:
+
+   cp -r src/utils/reactions.js  CAMINHO_DO_BOT/src/utils/
+   cp -r src/plugins/cmds-aleatorios/*.js  CAMINHO_DO_BOT/src/plugins/cmds-aleatorios/
+   cp src/plugins/adulto/pack.js  CAMINHO_DO_BOT/src/plugins/adulto/
+
+2. Remova o .dono:
+   mv CAMINHO_DO_BOT/src/plugins/dono/dono.js CAMINHO_DO_BOT/backups/ 2>/dev/null
+
+3. Commit e push:
+   cd CAMINHO_DO_BOT
+   git add -A
+   git commit -m "fix: reações em GIF animado + remove dono/menu18"
+   git push
+
+Arquivos incluídos:
+- src/utils/reactions.js          (GIF em .beijo .abraco .tapa etc)
+- src/plugins/cmds-aleatorios/    (hugimg kissimg dance cry wave wink happy patimg)
+- src/plugins/adulto/pack.js      (sem .menu18)
