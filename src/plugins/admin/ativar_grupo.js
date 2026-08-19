@@ -6,10 +6,6 @@ function formatDate(ts) {
   return new Date(ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
-/**
- * Aceita: 30 | 30d | 1m | 5m | 2h
- * Retorna { ms, label }
- */
 function parseDuration(raw, defaultDays = 30) {
   if (raw == null || raw === '') {
     const ms = defaultDays * 24 * 60 * 60 * 1000
@@ -20,8 +16,8 @@ function parseDuration(raw, defaultDays = 30) {
   if (!m) {
     const n = parseInt(s, 10)
     if (!n || n < 1) return null
-    const ms = n * 24 * 60 * 60 * 1000
-    return { ms, label: `${n} dia(s)`, days: n }
+      const ms = n * 24 * 60 * 60 * 1000
+      return { ms, label: `${n} dia(s)`, days: n }
   }
   const n = parseInt(m[1], 10)
   const unit = m[2] || 'd'
@@ -44,51 +40,47 @@ module.exports = {
   async execute({ from, args, reply, isDono, sender, prefix }) {
     if (!isDono) return reply('❌ Apenas o dono do bot pode usar este comando.')
 
-    let groupId = null
-    let durRaw = null
+      let groupId = null
+      let durRaw = null
 
-    if (args[0] && String(args[0]).includes('@g.us')) {
-      groupId = args[0]
-      durRaw = args[1]
-    } else if (from.endsWith('@g.us')) {
-      groupId = from
-      durRaw = args[0]
-    } else if (args[0]) {
-      groupId = args[0].endsWith('@g.us') ? args[0] : args[0] + '@g.us'
-      durRaw = args[1]
-    }
+      if (args[0] && String(args[0]).includes('@g.us')) {
+        groupId = args[0]
+        durRaw = args[1]
+      } else if (from.endsWith('@g.us')) {
+        groupId = from
+        durRaw = args[0]
+      } else if (args[0]) {
+        groupId = args[0].endsWith('@g.us') ? args[0] : args[0] + '@g.us'
+        durRaw = args[1]
+      }
 
-    if (!groupId || !groupId.endsWith('@g.us')) {
-      return reply(
-        `📌 *Uso:*\n` +
+      if (!groupId || !groupId.endsWith('@g.us')) {
+        return reply(
+          `📌 *Uso:*\n` +
           `• *${prefix}ativar_grupo* 30     → 30 dias\n` +
           `• *${prefix}ativar_grupo* 1m     → 1 minuto\n` +
           `• *${prefix}ativar_grupo* 2h     → 2 horas\n` +
           `• *${prefix}ativar_grupo* <id> 30`
-      )
-    }
+        )
+      }
 
-    const dur = parseDuration(durRaw, 30)
-    if (!dur) return reply('⚠️ Duração inválida. Ex: 30, 1m, 5m, 2h')
+      const dur = parseDuration(durRaw, 30)
+      if (!dur) return reply('⚠️ Duração inválida. Ex: 30, 1m, 5m, 2h')
 
-    const expires = Date.now() + dur.ms
-    const groups = db.load('groups')
-    groups[groupId] = {
-      active: true,
-      expires,
-      activatedAt: Date.now(),
-      activatedBy: sender,
-      days: dur.days,
-      label: dur.label
-    }
-    db.markDirty('groups')
-    db.flush()
+        const expires = Date.now() + dur.ms
 
-    await reply(
-      `✅ *Grupo ativado!*\n\n` +
-        `🆔 \`${groupId}\`\n` +
-        `⏱ Duração: *${dur.label}*\n` +
-        `⏰ Expira: *${formatDate(expires)}*`
-    )
+        // ✅ Agora salva no Supabase
+        const result = await db.activateGroup(groupId, dur.days, sender)
+
+        if (!result) {
+          return reply('❌ Erro ao ativar o grupo no Supabase.')
+        }
+
+        await reply(
+          `✅ *Grupo ativado!*\n\n` +
+          `🆔 \`${groupId}\`\n` +
+          `⏱ Duração: *${dur.label}*\n` +
+          `⏰ Expira: *${formatDate(expires)}*`
+        )
   }
 }
