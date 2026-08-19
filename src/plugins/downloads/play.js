@@ -21,8 +21,8 @@ module.exports = {
       await reply('🔎 Procurando...');
 
       let video;
+      let videoId = null;
       if (/youtube\.com|youtu\.be/i.test(q)) {
-        let videoId = null;
         if (q.includes('v=')) videoId = q.split('v=')[1]?.split('&')[0];
         else videoId = q.split('/').pop()?.split('?')[0];
 
@@ -33,14 +33,18 @@ module.exports = {
       } else {
         const r = await yts(q);
         video = r.videos?.[0];
+        if (video?.url) {
+          if (video.url.includes('v=')) videoId = video.url.split('v=')[1]?.split('&')[0];
+          else videoId = video.url.split('/').pop()?.split('?')[0];
+        }
       }
 
-      if (!video?.url) return reply('❌ Nada encontrado. Tente outro nome ou link.');
+      if (!video?.url || !videoId) return reply('❌ Nada encontrado. Tente outro nome ou link.');
 
       await reply(`⬇️ Baixando: *${video.title || 'música'}*...\n⏳ Processando via RapidAPI.`);
 
-      // Testando a rota padrão com o parâmetro 'url'
-      const apiUrl = `https://${RAPID_API_HOST}/dl?url=${encodeURIComponent(video.url)}`;
+      // Ajustado para usar o parâmetro 'id' que a API costuma utilizar nos endpoints do painel
+      const apiUrl = `https://${RAPID_API_HOST}/dl?id=${videoId}`;
 
       const apiResponse = await fetch(apiUrl, {
         method: "GET",
@@ -53,11 +57,10 @@ module.exports = {
       const data = await apiResponse.json();
       console.log("[RapidAPI Resposta Completa]:", JSON.stringify(data, null, 2));
 
-      // Procura o link em várias propriedades comuns de APIs do RapidAPI
       const downloadUrl = data.link || data.url || data.download || (data.result && data.result.url) || (data.data && data.data.dl);
 
       if (!downloadUrl) {
-        return reply('❌ A API recusou o link. Veja os logs do Render para analisar o formato retornado.');
+        return reply('❌ A API não retornou o link de download direto. Veja os logs do Render.');
       }
 
       const audioResponse = await fetch(downloadUrl);
