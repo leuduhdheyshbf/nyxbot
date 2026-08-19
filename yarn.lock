@@ -7,6 +7,11 @@
   resolved "https://registry.npmjs.org/@borewit/text-codec/-/text-codec-0.2.2.tgz#75025f735c0983b3a871668804a57387e3649375"
   integrity sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==
 
+"@bufbuild/protobuf@^2.0.0":
+  version "2.14.0"
+  resolved "https://registry.npmjs.org/@bufbuild/protobuf/-/protobuf-2.14.0.tgz#a5e962823f9c22c0d5e9aedb9a08d8f93735299c"
+  integrity sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==
+
 "@cacheable/memory@^2.2.0":
   version "2.2.0"
   resolved "https://registry.npmjs.org/@cacheable/memory/-/memory-2.2.0.tgz#72aeb8b051f6d597d10ac8595b94ad8302bd2239"
@@ -1339,6 +1344,11 @@ fast-redact@^3.0.0:
   resolved "https://registry.npmjs.org/fast-redact/-/fast-redact-3.5.0.tgz#e9ea02f7e57d0cd8438180083e93077e496285e4"
   integrity sha512-dwsoQlS7h9hMeYUq1W++23NDcBLV4KqONnITDV9DjfS3q1SgDGVrBdvvTLUotWtPSD7asWDV9/CmsZPy8Hf70A==
 
+fflate@^0.8.2:
+  version "0.8.3"
+  resolved "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz#bc27d8eb30343d4d512abb03480202ce65d825fc"
+  integrity sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==
+
 file-type@16.5.3:
   version "16.5.3"
   resolved "https://registry.npmjs.org/file-type/-/file-type-16.5.3.tgz#474b7e88c74724046abb505e9b8ed4db30c4fc06"
@@ -1779,6 +1789,11 @@ merge-descriptors@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/merge-descriptors/-/merge-descriptors-2.0.0.tgz#ea922f660635a2249ee565e0449f951e6b603808"
   integrity sha512-Snk314V5ayFLhp3fkUREub6WtjBfPdCPY1Ln8/8munuLuiYhsABgBVWsozAG+MWMbVEvcdcpbi9R7ww22l9Q3g==
+
+meriyah@^7.3.1:
+  version "7.3.2"
+  resolved "https://registry.npmjs.org/meriyah/-/meriyah-7.3.2.tgz#3e318f68602efd49aaf8199dc3650dd40242043f"
+  integrity sha512-uFPXbsoxaEd7PafMz3K/n/Z3kXz7iZBJtYU0VQB/kcV7i33+JghLTKweabLir480FUsyLz6gUIj4LW7kCQ35TA==
 
 mime-db@1.52.0:
   version "1.52.0"
@@ -2751,6 +2766,15 @@ xmlbuilder@~11.0.0:
   version "11.0.1"
   resolved "https://registry.npmjs.org/xmlbuilder/-/xmlbuilder-11.0.1.tgz#be9bae1c8a046e76b31127726347d0ad7002beb3"
   integrity sha512-fDlsI/kFEx7gLvbecc0/ohLG50fugQp8ryHzMTuW9vSa1GJ0XYWKnhsUx7oie3G98+r56aTQIUB4kht42R3JvA==
+
+youtubei.js@^18.0.0:
+  version "18.0.0"
+  resolved "https://registry.npmjs.org/youtubei.js/-/youtubei.js-18.0.0.tgz#f14876111984e79208339c85b66ca03f55401d0e"
+  integrity sha512-7Tztl5QzNL4nIhiAxa4P/0C8cDDsUe0j4iaUeNiaA+ZfSe/l+HkHxXyoWlQXNW7IPi2n6AW23ysVMJLDh+AwWQ==
+  dependencies:
+    "@bufbuild/protobuf" "^2.0.0"
+    fflate "^0.8.2"
+    meriyah "^7.3.1"
 
 yt-search@2.10.4:
   version "2.10.4"
