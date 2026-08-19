@@ -19,3 +19,9 @@ echo "✅ ffmpeg baixado!"
 echo "🚀 Instalando dependências do Node.js..."
 yarn --frozen-lockfile install
 echo "✅ Build concluído com sucesso!"
+
+# ==========================================================
+# Geração automática de cookies do YouTube
+# ==========================================================
+echo "🔄 Gerando cookies do YouTube..."
+python3 generate_cookies.py || echo "⚠️ Erro ao gerar cookies, mas continuando..."
