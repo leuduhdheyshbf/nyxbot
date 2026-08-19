@@ -1,37 +1,34 @@
 'use strict'
 
-const { fetchReactionImages, sendReactionImages } = require('../../utils/reactions')
+const { sendGifReaction, resolveTarget } = require('../../utils/gifUtils')
 
 module.exports = {
   name: 'morder',
-  description: 'mordeu alguém (com imagem)',
+  description: 'Morde alguém com um GIF animado',
   category: 'resenha',
-  aliases: ["bite"],
+  aliases: ["bite","mordida"],
   cooldown: 3,
 
-  async execute({ client, from, info, reply, reagir, sender, pushname }) {
-    const quoted = info.message?.extendedTextMessage?.contextInfo
-    const target = quoted?.participant || quoted?.mentionedJid?.[0]
-    if (!target) return reply('❗ Marque ou responda alguém.\nEx: .morder @pessoa')
+  async execute({ client, from, info, args, reply, reagir, sender }) {
+    const target = resolveTarget(info, args)
+    if (!target) {
+      return reply('❗ Marque ou responda alguém.\nEx: .morder @pessoa')
+    }
 
-    await reagir('🧛')
+    await reagir('🦷')
 
     const fromTag = '@' + String(sender).split('@')[0]
     const toTag = '@' + String(target).split('@')[0]
-    const caption = `🧛 ${fromTag} *mordeu* ${toTag}!`
+    const caption = `🦷 ${fromTag} *mordeu* ${toTag}!`
 
-    try {
-      const urls = await fetchReactionImages('bite', 2)
-      if (!urls.length) throw new Error('API sem imagem')
-      await sendReactionImages(client, from, info, urls, caption, [sender, target])
-    } catch (e) {
-      console.error('[morder]', e.message)
-      // fallback texto se API cair
-      await client.sendMessage(
-        from,
-        { text: caption, mentions: [sender, target] },
-        { quoted: info }
-      )
-    }
+    await sendGifReaction({
+      client,
+      from,
+      info,
+      sender,
+      target,
+      caption,
+      actions: ["bite"]
+    })
   }
 }

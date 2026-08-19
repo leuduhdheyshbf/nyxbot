@@ -33,11 +33,20 @@ function getProfile(jid, config) {
   }
 }
 
+/** Rank síncrono (cache em memória) */
 function rankTop(limit = 10) {
-  const users = db.load('users')
-  return Object.values(users)
+  const users = db.getAllUsers ? db.getAllUsers() : Object.values(db.load('users'))
+  return users
     .sort((a, b) => (b.level || 1) - (a.level || 1) || (b.xp || 0) - (a.xp || 0))
     .slice(0, limit)
 }
 
-module.exports = { xpForLevel, addXp, getProfile, rankTop }
+/** Rank direto do Supabase (mais preciso após restart) */
+async function rankTopAsync(limit = 10) {
+  if (typeof db.rankTopAsync === 'function') {
+    return db.rankTopAsync(limit)
+  }
+  return rankTop(limit)
+}
+
+module.exports = { xpForLevel, addXp, getProfile, rankTop, rankTopAsync }

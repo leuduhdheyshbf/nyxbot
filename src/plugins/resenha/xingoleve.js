@@ -1,12 +1,34 @@
+'use strict'
+
+const { sendGifReaction, resolveTarget } = require('../../utils/gifUtils')
+
 module.exports = {
   name: 'xingoleve',
-  description: 'Xingamento leve (zoeira)',
+  description: 'Xinga de leve alguém com um GIF animado',
   category: 'resenha',
-  aliases: ["xingo"],
-  async execute({ reply, reagir }) {
+  aliases: [],
+  cooldown: 3,
+
+  async execute({ client, from, info, args, reply, reagir, sender }) {
+    const target = resolveTarget(info, args)
+    if (!target) {
+      return reply('❗ Marque ou responda alguém.\nEx: .xingoleve @pessoa')
+    }
+
     await reagir('😤')
-    const items = ["Seu cérebro pediu férias e não voltou.","Você é a prova de que o CTRL+Z não funciona na vida.","Parabéns, você bugou o senso comum.","Se fosse arquivo, estaria na lixeira.","Seu carregador social está em 1%."]
-    const pick = items[Math.floor(Math.random() * items.length)]
-    await reply(`😤 *Xingamento leve (zoeira)*\n\n${pick}`)
+
+    const fromTag = '@' + String(sender).split('@')[0]
+    const toTag = '@' + String(target).split('@')[0]
+    const caption = `😤 ${fromTag} *xingou de leve* ${toTag}!`
+
+    await sendGifReaction({
+      client,
+      from,
+      info,
+      sender,
+      target,
+      caption,
+      actions: ["poke","smug"]
+    })
   }
 }

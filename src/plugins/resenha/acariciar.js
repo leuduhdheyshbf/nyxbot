@@ -1,24 +1,34 @@
+'use strict'
+
+const { sendGifReaction, resolveTarget } = require('../../utils/gifUtils')
+
 module.exports = {
   name: 'acariciar',
-  description: 'acariciou alguém (menção/reply)',
+  description: 'Acaricia alguém com um GIF animado',
   category: 'resenha',
-  aliases: [],
-  async execute({ client, from, info, args, reply, sender, reagir }) {
-    await reagir('🖐️')
-    const quoted = info.message?.extendedTextMessage?.contextInfo
-    let target = quoted?.participant || quoted?.mentionedJid?.[0]
-    if (!target && args[0]) {
-      const n = args[0].replace(/\D/g, '')
-      if (n.length >= 10) target = n + '@s.whatsapp.net'
+  aliases: ["pat","acaricia"],
+  cooldown: 3,
+
+  async execute({ client, from, info, args, reply, reagir, sender }) {
+    const target = resolveTarget(info, args)
+    if (!target) {
+      return reply('❗ Marque ou responda alguém.\nEx: .acariciar @pessoa')
     }
-    if (!target) return reply('❗ Marque alguém ou responda a mensagem.\nEx: .acariciar @fulano')
-    const frases = ["acariciou com força total","acariciou de um jeito épico","acariciou e o grupo inteiro viu","acariciou no estilo gótico 🦇","acariciou e ainda sorriu"]
-    const f = frases[Math.floor(Math.random() * frases.length)]
-    const a = '@' + String(sender).split('@')[0]
-    const b = '@' + String(target).split('@')[0]
-    await client.sendMessage(from, {
-      text: `🖐️ ${a} ${f} em ${b}!`,
-      mentions: [sender, target]
-    }, { quoted: info })
+
+    await reagir('🖐️')
+
+    const fromTag = '@' + String(sender).split('@')[0]
+    const toTag = '@' + String(target).split('@')[0]
+    const caption = `🖐️ ${fromTag} *acariciou* ${toTag}!`
+
+    await sendGifReaction({
+      client,
+      from,
+      info,
+      sender,
+      target,
+      caption,
+      actions: ["pat"]
+    })
   }
 }
