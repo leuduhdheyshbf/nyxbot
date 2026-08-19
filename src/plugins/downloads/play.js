@@ -11,8 +11,9 @@ const ROOT = path.join(__dirname, '..', '..', '..')
 const COOKIES = path.join(ROOT, 'cookies.txt')
 const YTDLP = path.join(ROOT, 'yt-dlp')
 const BIN = fs.existsSync(YTDLP) ? `./yt-dlp` : 'yt-dlp'
+const FFMPEG = fs.existsSync(path.join(ROOT, 'ffmpeg')) ? './ffmpeg' : 'ffmpeg'
 
-// Lista de proxies (formato já testado)
+// Lista de proxies
 const proxies = [
   "http://Chinaproxys:cpaproxys@92.112.175.210:6483",
 "http://Chinaproxys:cpaproxys@45.38.89.51:5986",
@@ -52,7 +53,7 @@ function hasValidCookies() {
 
 module.exports = {
   name: 'play',
-  description: 'Baixa áudio do YouTube (modo rápido com proxy)',
+  description: 'Baixa áudio do YouTube com proxy e conversão MP3',
   category: 'downloads',
   aliases: ['ytmp3', 'musica', 'song'],
 
@@ -89,19 +90,35 @@ module.exports = {
         await reply(`⬇️ Baixando: *${video.title || 'música'}*...`)
 
         const id = crypto.randomBytes(8).toString('hex')
-        const outFile = path.join(tmpdir(), `${id}.m4a`)
+        const outFile = path.join(tmpdir(), `${id}.mp3`)
+        const rawFile = path.join(tmpdir(), `${id}.raw`)
 
         const proxyEscolhido = escolherProxy();
       const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
       const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
 
-      // Comando ultra rápido com proxy
-      const cmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio[ext=m4a]/bestaudio" ${common} -o "${outFile}" "${video.url}"`
+      // Baixa o melhor formato de áudio disponível, independente do formato
+      const downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio" ${common} -o "${rawFile}" "${video.url}"`
 
-      await run(cmd)
+      await run(downloadCmd)
+
+      // Procura o arquivo baixado (pode ser m4a, webm, opus, etc.)
+      const files = fs.readdirSync(tmpdir())
+      const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000)
+
+      if (!downloadedFile) {
+        return reply('❌ Não foi possível baixar o áudio.')
+      }
+
+      const downloadedPath = path.join(tmpdir(), downloadedFile)
+
+      // Converte para MP3 usando ffmpeg
+      await run(`${FFMPEG} -y -i "${downloadedPath}" -vn -ab 128k "${outFile}"`, 60000)
+
+      try { fs.unlinkSync(downloadedPath) } catch {}
 
       if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
-        return reply('❌ Não foi possível baixar o áudio.')
+        return reply('❌ Erro ao converter para MP3.')
       }
 
       const buf = fs.readFileSync(outFile)
@@ -113,8 +130,8 @@ module.exports = {
         from,
         {
           audio: buf,
-          mimetype: 'audio/mp4',
-          fileName: `${safeTitle}.m4a`,
+          mimetype: 'audio/mpeg',
+          fileName: `${safeTitle}.mp3`,
           ptt: false
         },
         { quoted: info }
@@ -126,7 +143,7 @@ module.exports = {
           text:
           `🎵 *${video.title || 'Música'}*\n` +
           `⏱️ ${video.timestamp || '—'}\n` +
-          `⚡ Modo Rápido`
+          `⚡ Baixado e convertido com sucesso!`
         },
         { quoted: info }
       )
