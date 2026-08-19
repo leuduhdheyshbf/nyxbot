@@ -18,13 +18,7 @@ const proxies = [
   "http://Chinaproxys:cpaproxys@92.112.175.210:6483",
 "http://Chinaproxys:cpaproxys@45.38.89.51:5986",
 "http://Chinaproxys:cpaproxys@23.26.154.40:6777",
-"http://Chinaproxys:cpaproxys@23.26.154.215:6952",
-"http://Chinaproxys:cpaproxys@92.112.175.3:6276",
-"http://Chinaproxys:cpaproxys@185.72.240.6:7042",
-"http://Chinaproxys:cpaproxys@23.129.252.220:6488",
-"http://Chinaproxys:cpaproxys@85.198.47.157:6425",
-"http://Chinaproxys:cpaproxys@85.198.47.98:6366",
-"http://Chinaproxys:cpaproxys@85.198.45.232:6156"
+"http://Chinaproxys:cpaproxys@23.26.154.215:6952"
 ];
 
 let proxyIndex = 0;
@@ -97,9 +91,27 @@ module.exports = {
         const rawFile = path.join(tmpdir(), `${id}.raw`)
 
         const cookieArg = useCookies ? `--cookies "${COOKIES}"` : ''
-        const common = `--no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
+
+        // CORREÇÃO APLICADA AQUI: Injeção do extractor-args para simular cliente Mobile e Web
+        const common = `--extractor-args "youtube:player_client=android,web" --no-playlist --no-warnings --no-check-certificates ${cookieArg}`.trim()
 
         let success = false;
+
+        // 1. TENTATIVA DIRETA (Sem Proxy) - Usando o IP do Render
+        try {
+          console.log(`[play] Tentativa inicial direta (SEM PROXY)`);
+          let directCmd = `${BIN} -f "bestaudio/best" ${common} -o "${rawFile}" "${video.url}"`;
+          await run(directCmd);
+
+          if (fs.existsSync(rawFile) && fs.statSync(rawFile).size > 1000) {
+            success = true;
+            console.log(`[play] Sucesso sem usar proxy!`);
+          }
+        } catch (e) {
+          console.log(`[play] Falha na tentativa direta: ${e.message}`);
+        }
+
+        // 2. TENTATIVAS COM PROXY (Caso o IP direto falhe)
         let tentativas = 0;
         let lastError = null;
 
@@ -109,47 +121,39 @@ module.exports = {
 
           try {
             console.log(`[play] Tentativa ${tentativas} com proxy ${proxyEscolhido}`);
-
-            // Tenta baixar o melhor áudio
             let downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "bestaudio/best" ${common} -o "${rawFile}" "${video.url}"`;
             await run(downloadCmd);
 
-            // Se funcionou, verifica o arquivo
-            const files = fs.readdirSync(tmpdir());
-            const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000);
-            if (downloadedFile) {
+            if (fs.existsSync(rawFile) && fs.statSync(rawFile).size > 1000) {
               success = true;
               break;
             }
           } catch (e) {
             lastError = e;
-            console.log(`[play] Proxy ${proxyEscolhido} falhou: ${e.message}`);
-            // Não faz nada, tenta o próximo
+            console.log(`[play] Proxy falhou.`);
           }
         }
 
-        // Se nenhum proxy funcionou, tenta fallback com formato 18 (vídeo 360p)
+        // Se falhou tudo, fallback formato 18
         if (!success) {
-          console.log('[play] Todos os proxies falharam. Tentando fallback com formato 18...');
-          const proxyEscolhido = escolherProxy();
-          const downloadCmd = `${BIN} --proxy "${proxyEscolhido}" -f "18" ${common} -o "${rawFile}" "${video.url}"`;
-          await run(downloadCmd);
-          success = true;
+          console.log('[play] Proxies e IP falharam. Fallback para formato 18...');
+          try {
+            let directCmd18 = `${BIN} -f "18" ${common} -o "${rawFile}" "${video.url}"`;
+            await run(directCmd18);
+            if (fs.existsSync(rawFile) && fs.statSync(rawFile).size > 1000) {
+              success = true;
+            }
+          } catch(e) { console.log("Fallback falhou."); }
         }
 
-        // Verifica se o arquivo foi baixado
-        const files = fs.readdirSync(tmpdir());
-        const downloadedFile = files.find(f => f.startsWith(id) && fs.statSync(path.join(tmpdir(), f)).size > 1000);
-        if (!downloadedFile) {
-          return reply('❌ Não foi possível baixar o áudio com nenhum proxy ou fallback.');
+        if (!success || !fs.existsSync(rawFile)) {
+          return reply('❌ Não foi possível baixar o áudio devido a bloqueios do YouTube. Tente novamente mais tarde.');
         }
-
-        const downloadedPath = path.join(tmpdir(), downloadedFile);
 
         // Converte para MP3 usando ffmpeg
-        await run(`${FFMPEG} -y -i "${downloadedPath}" -vn -ab 128k "${outFile}"`, 60000);
+        await run(`${FFMPEG} -y -i "${rawFile}" -vn -ab 128k "${outFile}"`, 60000);
 
-        try { fs.unlinkSync(downloadedPath) } catch {}
+        try { fs.unlinkSync(rawFile) } catch {}
 
         if (!fs.existsSync(outFile) || fs.statSync(outFile).size < 1000) {
           return reply('❌ Erro ao converter para MP3.');
@@ -185,7 +189,7 @@ module.exports = {
         try { fs.unlinkSync(outFile) } catch {}
     } catch (e) {
       console.error('[play]', e);
-      reply(`❌ Erro ao baixar: ${e.message}`);
+      reply(`❌ Erro crítico: ${e.message}`);
     }
   }
 };
