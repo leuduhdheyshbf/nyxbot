@@ -1,13 +1,15 @@
 'use strict'
 
 const yts = require('yt-search');
+const axios = require('axios');
 
 const RAPID_API_KEY = "6497388db0sh304dcb3481c5238p1091a7jsn85b65d43c96d";
 const RAPID_API_HOST = "youtube-mp4-mp3-downloader.p.rapidapi.com";
+const BASE_URL = `https://${RAPID_API_HOST}/api/v1`;
 
 module.exports = {
   name: 'play',
-  description: 'Baixa áudio do YouTube usando a API da Opachi (RapidAPI)',
+  description: 'Baixa áudio do YouTube usando a API da Opachi com Axios',
   category: 'downloads',
   aliases: ['ytmp3', 'musica', 'song'],
 
@@ -21,8 +23,9 @@ module.exports = {
       await reply('🔎 Procurando...');
 
       let video;
+      let videoId = null;
+
       if (/youtube\.com|youtu\.be/i.test(q)) {
-        let videoId = null;
         if (q.includes('v=')) videoId = q.split('v=')[1]?.split('&')[0];
         else videoId = q.split('/').pop()?.split('?')[0];
 
@@ -33,67 +36,62 @@ module.exports = {
       } else {
         const r = await yts(q);
         video = r.videos?.[0];
+        if (video?.url) {
+          if (video.url.includes('v=')) videoId = video.url.split('v=')[1]?.split('&')[0];
+          else videoId = video.url.split('/').pop()?.split('?')[0];
+        }
       }
 
-      if (!video?.url) return reply('❌ Nada encontrado. Tente outro nome ou link.');
+      if (!video?.url || !videoId) return reply('❌ Nada encontrado. Tente outro nome ou link.');
 
       await reply(`⬇️ Iniciando conversão: *${video.title || 'música'}*...`);
 
-      // Passo 1: Disparar o download/conversão passando a URL do YouTube
-      const startUrl = `https://${RAPID_API_HOST}/download?url=${encodeURIComponent(video.url)}`;
-      const startRes = await fetch(startUrl, {
-        method: "GET",
+      const options = {
         headers: {
-          "x-rapidapi-key": RAPID_API_KEY,
-          "x-rapidapi-host": RAPID_API_HOST
+          'x-rapidapi-key': RAPID_API_KEY,
+          'x-rapidapi-host': RAPID_API_HOST
         }
-      });
+      };
 
-      const startData = await startRes.json();
-      console.log("[Opachi Início]:", JSON.stringify(startData, null, 2));
+      // 1. Iniciar o processo de download
+      const startRes = await axios.get(`${BASE_URL}/download?id=${videoId}&format=mp3`, options);
+      const progressId = startRes.data.id || startRes.data.progressId;
 
-      const progressId = startData.progressId || startData.id;
       if (!progressId) {
-        return reply('❌ A API não retornou o ID de progresso. Verifique os logs.');
+        return reply('❌ A API não retornou o ID de progresso.');
       }
 
-      // Passo 2: Fazer polling no endpoint de progresso até o arquivo ficar pronto
+      // 2. Loop para verificar o progresso com o while
       let downloadUrl = null;
-      const progressHost = RAPID_API_HOST; // Ajuste se o endpoint de progresso usar outro host, mas geralmente é o mesmo
+      let attempts = 0;
+      const maxAttempts = 15; // Evita loop infinito (aprox. 45 segundos)
 
-      for (let i = 0; i < 15; i++) { // Tenta por até 30 segundos (a cada 2 segundos)
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      while (!downloadUrl && attempts < maxAttempts) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Aguarda 3 segundos
 
-        const progUrl = `https://${progressHost}/progress?id=${progressId}`;
-        const progRes = await fetch(progUrl, {
-          method: "GET",
-          headers: {
-            "x-rapidapi-key": RAPID_API_KEY,
-            "x-rapidapi-host": RAPID_API_HOST
-          }
-        });
+        const progressRes = await axios.get(`${BASE_URL}/progress?id=${progressId}`, options);
+        const status = progressRes.data;
 
-        const progData = await progRes.json();
-        console.log(`[Opachi Progresso Tentativa ${i + 1}]:`, JSON.stringify(progData, null, 2));
+        console.log(`[Opachi Tentativa ${attempts}]:`, status);
 
-        // Procura pelo link final em várias propriedades possíveis que a API possa retornar
-        if (progData.link || progData.url || progData.downloadUrl || (progData.result && progData.result.url)) {
-          downloadUrl = progData.link || progData.url || progData.downloadUrl || progData.result.url;
+        if (status.status === 'completed' || status.downloadUrl || status.link || status.url) {
+          downloadUrl = status.downloadUrl || status.link || status.url || (status.result && status.result.url);
           break;
+        } else if (status.status === 'error') {
+          throw new Error("Erro no processamento da API.");
         }
       }
 
       if (!downloadUrl) {
-        return reply('❌ O tempo limite de conversão esgotou ou a API falhou em gerar o arquivo.');
+        return reply('❌ O tempo limite de conversão esgotou.');
       }
 
       await reply('📥 Baixando arquivo convertido para enviar...');
 
-      const audioResponse = await fetch(downloadUrl);
-      if (!audioResponse.ok) throw new Error('Falha ao baixar o arquivo gerado.');
-
-      const arrayBuffer = await audioResponse.arrayBuffer();
-      const audioBuffer = Buffer.from(arrayBuffer);
+      // Baixa o arquivo final via axios como arraybuffer
+      const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+      const audioBuffer = Buffer.from(audioResponse.data);
 
       const safeTitle = String(video.title || 'audio').replace(/[^\w\s.-]/g, '').slice(0, 60);
 
@@ -111,13 +109,13 @@ module.exports = {
       await client.sendMessage(
         from,
         {
-          text: `🎵 *${video.title || 'Música'}*\n⏱️ ${video.timestamp || '—'}\n⚡ Processado via Opachi (RapidAPI)!`
+          text: `🎵 *${video.title || 'Música'}*\n⏱️ ${video.timestamp || '—'}\n⚡ Processado via Opachi & Axios!`
         },
         { quoted: info }
       );
 
     } catch (e) {
-      console.error('[play Opachi Erro]', e);
+      console.error('[play Axios Erro]', e);
       reply(`❌ Erro ao processar: ${e.message}`);
     }
   }
