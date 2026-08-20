@@ -544,104 +544,103 @@ async function drawShip({ p1 = 'A', p2 = 'B', percent = 50 }) {
 async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   const list = (items || []).slice(0, 10)
   const n = Math.max(1, list.length)
-  const w = 540
-  const rowH = 62
-  const headerH = 88
-  const h = headerH + n * rowH + 40
+  const w = 520
+  const rowH = 56
+  const headerH = 86
+  const h = headerH + n * rowH + 28
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
   fillBg(ctx, w, h)
 
-  // painel principal
-  roundRect(ctx, 12, 12, w - 24, h - 24, 20)
+  // card
+  roundRect(ctx, 14, 14, w - 28, h - 28, 18)
   ctx.fillStyle = C.panel
   ctx.fill()
   ctx.strokeStyle = C.line
-  ctx.lineWidth = 2.5
+  ctx.lineWidth = 2
   ctx.stroke()
 
-  // header accent strip
-  roundRect(ctx, 12, 12, w - 24, 70, 20)
-  ctx.fillStyle = 'rgba(196,30,58,0.18)'
+  // header bar
+  roundRect(ctx, 14, 14, w - 28, 64, 18)
+  ctx.fillStyle = 'rgba(196,30,58,0.22)'
   ctx.fill()
-  // fix bottom of strip (cover lower radius)
-  ctx.fillRect(12, 50, w - 24, 32)
+  ctx.fillRect(14, 48, w - 28, 30)
 
   ctx.fillStyle = C.accent
-  ctx.font = 'bold 24px sans-serif'
+  ctx.font = 'bold 22px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
+  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 44)
   ctx.fillStyle = C.muted
   ctx.font = '12px sans-serif'
-  ctx.fillText('ranking do grupo', w / 2, 68)
+  ctx.fillText('ranking do grupo', w / 2, 64)
 
-  let y = headerH + 6
   const medals = ['🥇', '🥈', '🥉']
+  let y = headerH
 
   list.forEach((it, i) => {
-    let name = String(it.name || it.id || '?').trim()
-    if (!name) name = String(i + 1) + 'o'
-    if (name.length > 20) name = name.slice(0, 19) + '…'
-    const rawVal = it.value != null ? String(it.value) : '0'
-    const percent = Math.max(0, Math.min(100, parseInt(String(rawVal).replace(/\D/g, ''), 10) || 0))
+    // limpa nome: se parecer telefone/LID, usa Top N
+    let name = String(it.name || '').trim()
+    const looksPhone = !name ||
+      /^\+?\d/.test(name) ||
+      /\d{4,}/.test(name) ||
+      name.includes('…') ||
+      name.includes('...') ||
+      /^\(\d+\)/.test(name)
+    if (looksPhone) name = `Top ${i + 1}`
+    if (name.length > 16) name = name.slice(0, 15) + '…'
 
-    // row bg
-    roundRect(ctx, 26, y, w - 52, rowH - 12, 12)
-    if (i === 0) ctx.fillStyle = 'rgba(212,175,55,0.14)'
-    else if (i === 1) ctx.fillStyle = 'rgba(192,192,192,0.08)'
-    else if (i === 2) ctx.fillStyle = 'rgba(205,127,50,0.08)'
-    else ctx.fillStyle = i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.12)'
+    const percent = Math.max(0, Math.min(100,
+      parseInt(String(it.value != null ? it.value : '0').replace(/\D/g, ''), 10) || 0
+    ))
+
+    // row background
+    roundRect(ctx, 28, y, w - 56, rowH - 10, 12)
+    if (i === 0) ctx.fillStyle = 'rgba(212,175,55,0.16)'
+    else if (i === 1) ctx.fillStyle = 'rgba(192,192,192,0.10)'
+    else if (i === 2) ctx.fillStyle = 'rgba(205,127,50,0.10)'
+    else ctx.fillStyle = i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.14)'
     ctx.fill()
 
-    // medal / pos
+    // medal
     ctx.textAlign = 'left'
     if (i < 3) {
-      ctx.font = '26px sans-serif'
-      ctx.fillText(medals[i], 38, y + 34)
+      ctx.font = '24px sans-serif'
+      ctx.fillText(medals[i], 38, y + 32)
     } else {
       ctx.fillStyle = C.muted
-      ctx.font = 'bold 18px sans-serif'
-      ctx.fillText(String(i + 1), 48, y + 34)
+      ctx.font = 'bold 16px sans-serif'
+      ctx.fillText(String(i + 1), 46, y + 32)
     }
 
-    // label
+    // name / Top N
     ctx.fillStyle = C.text
-    ctx.font = i === 0 ? 'bold 16px sans-serif' : '15px sans-serif'
-    ctx.fillText(name, 78, y + 22)
+    ctx.font = i === 0 ? 'bold 15px sans-serif' : '14px sans-serif'
+    ctx.fillText(name, 74, y + 22)
 
-    // progress bar track
-    const barX = 78
-    const barY = y + 32
-    const barW = w - 170
-    const barH = 11
-    roundRect(ctx, barX, barY, barW, barH, 6)
-    ctx.fillStyle = 'rgba(255,255,255,0.07)'
+    // bar
+    const barX = 74
+    const barY = y + 30
+    const barW = w - 160
+    const barH = 10
+    roundRect(ctx, barX, barY, barW, barH, 5)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'
     ctx.fill()
 
-    const fillW = Math.max(6, Math.floor((percent / 100) * barW))
-    roundRect(ctx, barX, barY, fillW, barH, 6)
-    const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0)
-    if (i === 0) {
-      grad.addColorStop(0, '#f0d78c')
-      grad.addColorStop(1, '#c41e3a')
-    } else if (i === 1) {
-      grad.addColorStop(0, '#e0e0e0')
-      grad.addColorStop(1, '#8a6a75')
-    } else if (i === 2) {
-      grad.addColorStop(0, '#e8a86b')
-      grad.addColorStop(1, '#5c2a3a')
-    } else {
-      grad.addColorStop(0, '#e85a6b')
-      grad.addColorStop(1, '#5c2a3a')
-    }
-    ctx.fillStyle = grad
+    const fillW = Math.max(8, Math.floor((percent / 100) * barW))
+    roundRect(ctx, barX, barY, fillW, barH, 5)
+    const g = ctx.createLinearGradient(barX, 0, barX + barW, 0)
+    if (i === 0) { g.addColorStop(0, '#f0d78c'); g.addColorStop(1, '#c41e3a') }
+    else if (i === 1) { g.addColorStop(0, '#e8e8e8'); g.addColorStop(1, '#8a6a75') }
+    else if (i === 2) { g.addColorStop(0, '#e8a86b'); g.addColorStop(1, '#5c2a3a') }
+    else { g.addColorStop(0, '#e85a6b'); g.addColorStop(1, '#5c2a3a') }
+    ctx.fillStyle = g
     ctx.fill()
 
-    // %
+    // percent
     ctx.textAlign = 'right'
     ctx.fillStyle = i === 0 ? C.gold : C.text
-    ctx.font = 'bold 20px sans-serif'
-    ctx.fillText(percent + '%', w - 36, y + 36)
+    ctx.font = 'bold 18px sans-serif'
+    ctx.fillText(percent + '%', w - 36, y + 34)
 
     y += rowH
   })
