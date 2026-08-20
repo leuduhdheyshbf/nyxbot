@@ -62,7 +62,6 @@ function createCtx(sock, info, config, cmdManager) {
 
   const sendImage = async (fileOrBuffer, caption = '') => {
     const image = typeof fileOrBuffer === 'string' ? { url: fileOrBuffer } : fileOrBuffer
-    // se for path local
     const payload =
     typeof fileOrBuffer === 'string' && !fileOrBuffer.startsWith('http')
     ? { image: require('fs').readFileSync(fileOrBuffer), caption }
@@ -141,7 +140,6 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
           const ctx = createCtx(sock, info, config, cmdManager)
           if (!ctx.from) return
 
-            // prefixo por grupo
             let prefix = config.prefix
             if (ctx.isGroup) {
               const gp = db.getGroupPrefix(ctx.from)
@@ -152,12 +150,11 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
             const body = getMessageBody(info.message).trim()
             ctx.body = body
 
-            // fromMe: só processa se for comando
             if (info.key.fromMe && !body.startsWith(prefix)) return
 
               await enrichGroup(ctx, sock)
 
-              // mute
+              // Mute
               if (ctx.isGroup && !ctx.isAdmin) {
                 const mutes = db.getMutes()
                 if (mutes[ctx.from]?.includes(ctx.sender)) {
@@ -168,7 +165,7 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                 }
               }
 
-              // antilink simples
+              // Antilink
               if (ctx.isGroup && !ctx.isAdmin && ctx.isBotAdmin) {
                 const feats = db.getFeatures()
                 if (feats.antilink && /(https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com)/i.test(body)) {
@@ -180,7 +177,7 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                 }
               }
 
-              // XP por mensagem (não comando)
+              // XP por mensagem
               if (body && !body.startsWith(prefix)) {
                 levels.addXp(ctx.sender, config.moeda?.xpPorMensagem ?? 5, config)
                 return
@@ -195,17 +192,27 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                 ctx.q = parts.join(' ')
 
                 let cmd = cmdManager.get(cmdName)
-                // Só o prefixo (ex: ".") respondendo mídia → comando revela (nome ".")
                 if (!cmd && !cmdName && body === prefix) {
                   cmd = cmdManager.get('.') || cmdManager.get('revela')
                 }
                 if (!cmd) return
 
-                  // Aluguel de grupo: bloqueia comandos se expirado (dono liberado)
+                  // 🔥 BLOQUEIO DE GRUPO (com fallback para JSON)
                   if (ctx.isGroup && !ctx.isDono) {
-                    const allowAlways = new Set(['dono', 'meuid', 'ping'])
+                    const allowAlways = new Set(['dono', 'meuid', 'ping', 'ativar_grupo', 'reativar'])
                     const cmdKey = (cmd.originalName || cmd.name || '').toLowerCase()
-                    if (!allowAlways.has(cmdKey) && !(await db.isGroupActive(ctx.from))) {
+
+                    let isActive = false;
+                    try {
+                      // Tenta verificar no Supabase
+                      isActive = await db.isGroupActive(ctx.from);
+                    } catch (e) {
+                      // Se falhar, assume que está ativo (fallback)
+                      console.warn('[Supabase] Erro ao verificar grupo, assumindo ativo:', e.message);
+                      isActive = true;
+                    }
+
+                    if (!allowAlways.has(cmdKey) && !isActive) {
                       await ctx.reply(
                         '⛔ *Bot não ativo neste grupo.*\n\n' +
                         'Peça ao dono para ativar com:\n' +
@@ -232,6 +239,18 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                   const xpResult = levels.addXp(ctx.sender, config.moeda?.xpPorComando ?? 10, config)
                   if (xpResult.leveled) {
                     await ctx.reply(`✨ Você subiu para o nível *${xpResult.level}*!`)
+                  }
+
+                  // 🔥 TRY/CATCH PARA EVITAR QUE O ERRO DO SUPABASE PARE O BOT
+                  try {
+                    // Tenta salvar o usuário no Supabase (se falhar, ignora)
+                    const user = db.getUser(ctx.sender);
+                    if (user) {
+                      db.saveUser(ctx.sender, user);
+                    }
+                  } catch (e) {
+                    // Ignora silenciosamente e continua
+                    console.warn('[Supabase] Erro ao salvar usuário, ignorando:', e.message);
                   }
 
                   try {
