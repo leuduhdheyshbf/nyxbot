@@ -544,94 +544,106 @@ async function drawShip({ p1 = 'A', p2 = 'B', percent = 50 }) {
 async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   const list = (items || []).slice(0, 10)
   const n = Math.max(1, list.length)
-  const w = 560
-  const rowH = 58
-  const headerH = 78
-  const h = headerH + n * rowH + 36
+  const w = 540
+  const rowH = 62
+  const headerH = 88
+  const h = headerH + n * rowH + 40
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
   fillBg(ctx, w, h)
 
-  // painel
-  roundRect(ctx, 14, 14, w - 28, h - 28, 18)
+  // painel principal
+  roundRect(ctx, 12, 12, w - 24, h - 24, 20)
   ctx.fillStyle = C.panel
   ctx.fill()
   ctx.strokeStyle = C.line
-  ctx.lineWidth = 2
+  ctx.lineWidth = 2.5
   ctx.stroke()
 
-  // título
+  // header accent strip
+  roundRect(ctx, 12, 12, w - 24, 70, 20)
+  ctx.fillStyle = 'rgba(196,30,58,0.18)'
+  ctx.fill()
+  // fix bottom of strip (cover lower radius)
+  ctx.fillRect(12, 50, w - 24, 32)
+
   ctx.fillStyle = C.accent
-  ctx.font = 'bold 22px sans-serif'
+  ctx.font = 'bold 24px sans-serif'
   ctx.textAlign = 'center'
   ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
-  ctx.strokeStyle = C.line
-  ctx.beginPath()
-  ctx.moveTo(40, 62)
-  ctx.lineTo(w - 40, 62)
-  ctx.stroke()
+  ctx.fillStyle = C.muted
+  ctx.font = '12px sans-serif'
+  ctx.fillText('ranking do grupo', w / 2, 68)
 
-  const medals = ['🥇', '🥈', '🥉', '4', '5', '6', '7', '8', '9', '10']
-  let y = headerH + 8
+  let y = headerH + 6
+  const medals = ['🥇', '🥈', '🥉']
 
   list.forEach((it, i) => {
-    const name = String(it.name || it.id || '?').slice(0, 24)
+    let name = String(it.name || '').trim()
+    // evita LID feio na imagem
+    if (!name || /^@?\d{10,}$/.test(name) || name.includes('…') || name.length > 20) {
+      name = i === 0 ? '1º lugar' : i === 1 ? '2º lugar' : i === 2 ? '3º lugar' : `${i + 1}º lugar`
+    }
     const rawVal = it.value != null ? String(it.value) : '0'
     const percent = Math.max(0, Math.min(100, parseInt(String(rawVal).replace(/\D/g, ''), 10) || 0))
 
-    // fundo da linha
-    roundRect(ctx, 28, y - 6, w - 56, rowH - 10, 10)
-    ctx.fillStyle = i === 0 ? 'rgba(212,175,55,0.12)' : i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.15)'
+    // row bg
+    roundRect(ctx, 26, y, w - 52, rowH - 12, 12)
+    if (i === 0) ctx.fillStyle = 'rgba(212,175,55,0.14)'
+    else if (i === 1) ctx.fillStyle = 'rgba(192,192,192,0.08)'
+    else if (i === 2) ctx.fillStyle = 'rgba(205,127,50,0.08)'
+    else ctx.fillStyle = i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.12)'
     ctx.fill()
 
-    // medalha / posição
+    // medal / pos
     ctx.textAlign = 'left'
     if (i < 3) {
-      ctx.font = '22px sans-serif'
-      ctx.fillText(medals[i], 40, y + 28)
+      ctx.font = '26px sans-serif'
+      ctx.fillText(medals[i], 38, y + 34)
     } else {
       ctx.fillStyle = C.muted
-      ctx.font = 'bold 16px sans-serif'
-      ctx.fillText(`${i + 1}`, 48, y + 28)
+      ctx.font = 'bold 18px sans-serif'
+      ctx.fillText(String(i + 1), 48, y + 34)
     }
 
-    // nome
+    // label
     ctx.fillStyle = C.text
-    ctx.font = i === 0 ? 'bold 17px sans-serif' : '16px sans-serif'
-    ctx.fillText(name, 78, y + 18)
+    ctx.font = i === 0 ? 'bold 16px sans-serif' : '15px sans-serif'
+    ctx.fillText(name, 78, y + 22)
 
-    // barra de progresso
+    // progress bar track
     const barX = 78
-    const barY = y + 28
-    const barW = w - 200
-    const barH = 10
-    roundRect(ctx, barX, barY, barW, barH, 5)
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'
+    const barY = y + 32
+    const barW = w - 170
+    const barH = 11
+    roundRect(ctx, barX, barY, barW, barH, 6)
+    ctx.fillStyle = 'rgba(255,255,255,0.07)'
     ctx.fill()
-    const fillW = Math.max(4, Math.floor((percent / 100) * barW))
-    roundRect(ctx, barX, barY, fillW, barH, 5)
+
+    const fillW = Math.max(6, Math.floor((percent / 100) * barW))
+    roundRect(ctx, barX, barY, fillW, barH, 6)
     const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0)
     if (i === 0) {
-      grad.addColorStop(0, '#d4af37')
+      grad.addColorStop(0, '#f0d78c')
       grad.addColorStop(1, '#c41e3a')
     } else if (i === 1) {
-      grad.addColorStop(0, '#c0c0c0')
+      grad.addColorStop(0, '#e0e0e0')
       grad.addColorStop(1, '#8a6a75')
     } else if (i === 2) {
-      grad.addColorStop(0, '#cd7f32')
+      grad.addColorStop(0, '#e8a86b')
       grad.addColorStop(1, '#5c2a3a')
     } else {
-      grad.addColorStop(0, '#c41e3a')
+      grad.addColorStop(0, '#e85a6b')
       grad.addColorStop(1, '#5c2a3a')
     }
     ctx.fillStyle = grad
     ctx.fill()
 
-    // percentual
+    // %
     ctx.textAlign = 'right'
     ctx.fillStyle = i === 0 ? C.gold : C.text
-    ctx.font = 'bold 18px sans-serif'
-    ctx.fillText(percent + '%', w - 40, y + 30)
+    ctx.font = 'bold 20px sans-serif'
+    ctx.fillText(percent + '%', w - 36, y + 36)
 
     y += rowH
   })
@@ -639,7 +651,7 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   return save(canvas, 'rank')
 }
 
-/** Card genérico de texto (cantada, piada, 8ball...) */
+
 async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
   const w = 520
   const canvas = createCanvas(w, 240)
