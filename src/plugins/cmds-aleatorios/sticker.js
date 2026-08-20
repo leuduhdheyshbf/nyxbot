@@ -98,7 +98,7 @@ module.exports = {
   name: 'sticker',
   description: 'Figurinha rápida: normal, quadrada, esticar, círculo, blur, pb, invert, pixel, borda',
   category: 'cmds-aleatorios',
-  aliases: ['s', 'f', 'fig', 'figurinha', 'stiker', 'st'],
+  aliases: ['s', 'f', 'fig', 'figurinha', 'stiker'],  // .st fica no stickertexto
   cooldown: 2,
 
   async execute({ client, nyx, from, info, reply, reagir, q, sender }) {
