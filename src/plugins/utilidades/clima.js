@@ -1,15 +1,27 @@
 const axios = require('axios');
 
+// Função para remover acentos
+function removerAcentos(texto) {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 module.exports = {
   name: 'clima',
   description: 'Mostra o clima com ícone oficial do tempo',
   category: 'utilidades',
   aliases: ['tempo', 'weather'],
-  async execute({ client, from, info, args, prefix, reply }) {
-    const cidade = args.join(' ');
-    if (!cidade) {
+  async execute({ columbina, from, info, args, prefix, reply }) {
+    // Junta os argumentos, remove acentos e espaços extras
+    let cidadeRaw = args.join(' ');
+    if (!cidadeRaw) {
       return reply(`❌ Digite o nome de uma cidade.\nEx: ${prefix}clima belém - pa`);
     }
+
+    // Remove acentos e substitui " - " por "," (formato que a API gosta)
+    let cidade = removerAcentos(cidadeRaw)
+    .replace(/\s+-\s+/g, ',') // transforma "belém - pa" em "belem,pa"
+    .replace(/\s+/g, ' ')      // remove espaços extras
+    .trim();
 
     const WEATHER_KEY = 'bd5e378503939ddaee76f12ad7a97608';
     const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cidade)}&lang=pt_br&units=metric&appid=${WEATHER_KEY}`;
@@ -57,15 +69,14 @@ module.exports = {
       🔮 Nyx Bot • Clima
       `;
 
-      // Envia com o ícone oficial do clima
-      await client.sendMessage(from, {
+      await columbina.sendMessage(from, {
         image: { url: iconUrl },
         caption: mensagem
       }, { quoted: info });
 
     } catch (e) {
       console.error('[clima] Erro:', e.message);
-      reply(`❌ Cidade não encontrada ou erro na API.\nVerifique o nome e tente novamente.`);
+      reply(`❌ Cidade não encontrada ou erro na API.\nTente no formato: ${prefix}clima cidade,uf (ex: ${prefix}clima belem,pa)`);
     }
   }
 };
