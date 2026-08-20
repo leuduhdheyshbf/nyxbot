@@ -542,46 +542,97 @@ async function drawShip({ p1 = 'A', p2 = 'B', percent = 50 }) {
 
 /** Card de ranking top N */
 async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
-  const n = Math.min(10, (items || []).length || 1)
-  const w = 520
-  const rowH = 42
-  const h = 80 + n * rowH + 30
+  const list = (items || []).slice(0, 10)
+  const n = Math.max(1, list.length)
+  const w = 560
+  const rowH = 58
+  const headerH = 78
+  const h = headerH + n * rowH + 36
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
   fillBg(ctx, w, h)
 
-  roundRect(ctx, 16, 16, w - 32, h - 32, 16)
+  // painel
+  roundRect(ctx, 14, 14, w - 28, h - 28, 18)
   ctx.fillStyle = C.panel
   ctx.fill()
   ctx.strokeStyle = C.line
   ctx.lineWidth = 2
   ctx.stroke()
 
+  // título
   ctx.fillStyle = C.accent
-  ctx.font = 'bold 20px sans-serif'
+  ctx.font = 'bold 22px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 50)
+  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
+  ctx.strokeStyle = C.line
+  ctx.beginPath()
+  ctx.moveTo(40, 62)
+  ctx.lineTo(w - 40, 62)
+  ctx.stroke()
 
-  let y = 85
-  ;(items || []).slice(0, 10).forEach((it, i) => {
-    const name = String(it.name || it.id || '?').slice(0, 20)
-    const val = it.value != null ? String(it.value) : ''
-    // zebra
-    if (i % 2 === 0) {
-      roundRect(ctx, 30, y - 22, w - 60, rowH - 6, 8)
-      ctx.fillStyle = C.cell
-      ctx.fill()
-    }
-    ctx.fillStyle = i === 0 ? C.gold : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : C.text
-    ctx.font = 'bold 18px sans-serif'
+  const medals = ['🥇', '🥈', '🥉', '4', '5', '6', '7', '8', '9', '10']
+  let y = headerH + 8
+
+  list.forEach((it, i) => {
+    const name = String(it.name || it.id || '?').slice(0, 24)
+    const rawVal = it.value != null ? String(it.value) : '0'
+    const percent = Math.max(0, Math.min(100, parseInt(String(rawVal).replace(/\D/g, ''), 10) || 0))
+
+    // fundo da linha
+    roundRect(ctx, 28, y - 6, w - 56, rowH - 10, 10)
+    ctx.fillStyle = i === 0 ? 'rgba(212,175,55,0.12)' : i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.15)'
+    ctx.fill()
+
+    // medalha / posição
     ctx.textAlign = 'left'
-    ctx.fillText(`${i + 1}.`, 45, y)
+    if (i < 3) {
+      ctx.font = '22px sans-serif'
+      ctx.fillText(medals[i], 40, y + 28)
+    } else {
+      ctx.fillStyle = C.muted
+      ctx.font = 'bold 16px sans-serif'
+      ctx.fillText(`${i + 1}`, 48, y + 28)
+    }
+
+    // nome
     ctx.fillStyle = C.text
-    ctx.font = '18px sans-serif'
-    ctx.fillText(name, 80, y)
+    ctx.font = i === 0 ? 'bold 17px sans-serif' : '16px sans-serif'
+    ctx.fillText(name, 78, y + 18)
+
+    // barra de progresso
+    const barX = 78
+    const barY = y + 28
+    const barW = w - 200
+    const barH = 10
+    roundRect(ctx, barX, barY, barW, barH, 5)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'
+    ctx.fill()
+    const fillW = Math.max(4, Math.floor((percent / 100) * barW))
+    roundRect(ctx, barX, barY, fillW, barH, 5)
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0)
+    if (i === 0) {
+      grad.addColorStop(0, '#d4af37')
+      grad.addColorStop(1, '#c41e3a')
+    } else if (i === 1) {
+      grad.addColorStop(0, '#c0c0c0')
+      grad.addColorStop(1, '#8a6a75')
+    } else if (i === 2) {
+      grad.addColorStop(0, '#cd7f32')
+      grad.addColorStop(1, '#5c2a3a')
+    } else {
+      grad.addColorStop(0, '#c41e3a')
+      grad.addColorStop(1, '#5c2a3a')
+    }
+    ctx.fillStyle = grad
+    ctx.fill()
+
+    // percentual
     ctx.textAlign = 'right'
-    ctx.fillStyle = C.gold
-    ctx.fillText(val, w - 45, y)
+    ctx.fillStyle = i === 0 ? C.gold : C.text
+    ctx.font = 'bold 18px sans-serif'
+    ctx.fillText(percent + '%', w - 40, y + 30)
+
     y += rowH
   })
 
