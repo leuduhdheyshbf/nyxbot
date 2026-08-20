@@ -623,6 +623,119 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
   return save(canvas2, 'quote')
 }
 
+
+/**
+ * Menu visual de brincadeiras — cards góticos por categoria
+ * sections: [{ title, emoji, cmds: string[] }]
+ */
+async function drawBrincadeirasMenu({ prefix = '.', sections = [] } = {}) {
+  const p = prefix || '.'
+  const cols = 2
+  const cardW = 340
+  const gap = 16
+  const pad = 24
+  const headerH = 90
+  const footerH = 50
+  const lineH = 18
+  const titleH = 36
+
+  // calcular altura de cada card
+  const cards = (sections || []).map((s) => {
+    const cmds = s.cmds || []
+    // 3 comandos por linha
+    const rows = Math.ceil(cmds.length / 3) || 1
+    const h = titleH + rows * lineH + 28
+    return { ...s, cmds, rows, h }
+  })
+
+  // layout em 2 colunas (altura balanceada)
+  const colHeights = [0, 0]
+  const placed = cards.map((c) => {
+    const col = colHeights[0] <= colHeights[1] ? 0 : 1
+    const y = colHeights[col]
+    colHeights[col] += c.h + gap
+    return { ...c, col, y }
+  })
+
+  const contentH = Math.max(...colHeights, 100)
+  const w = pad * 2 + cols * cardW + gap
+  const h = headerH + contentH + footerH + pad
+
+  const canvas = createCanvas(w, h)
+  const ctx = canvas.getContext('2d')
+  fillBg(ctx, w, h)
+
+  // painel externo
+  roundRect(ctx, 12, 12, w - 24, h - 24, 20)
+  ctx.fillStyle = C.panel
+  ctx.fill()
+  ctx.strokeStyle = C.line
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  // header
+  ctx.fillStyle = C.accent
+  ctx.font = 'bold 26px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('☠  BRINCADEIRAS  ☠', w / 2, 48)
+  ctx.fillStyle = C.muted
+  ctx.font = '14px sans-serif'
+  ctx.fillText('Todas com imagem  •  tema gótico Nyx', w / 2, 72)
+
+  // linha decorativa
+  ctx.strokeStyle = C.line
+  ctx.beginPath()
+  ctx.moveTo(40, 82)
+  ctx.lineTo(w - 40, 82)
+  ctx.stroke()
+
+  const startY = headerH
+
+  for (const card of placed) {
+    const x = pad + card.col * (cardW + gap)
+    const y = startY + card.y
+
+    // card background
+    roundRect(ctx, x, y, cardW, card.h, 12)
+    ctx.fillStyle = C.cell
+    ctx.fill()
+    ctx.strokeStyle = C.line
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    // accent bar on left
+    ctx.fillStyle = C.accent
+    ctx.fillRect(x, y + 8, 4, card.h - 16)
+
+    // title
+    ctx.fillStyle = C.gold
+    ctx.font = 'bold 15px sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(`${card.emoji || '✦'}  ${String(card.title || '').toUpperCase()}`, x + 16, y + 24)
+
+    // commands in 3 columns inside card
+    ctx.fillStyle = C.text
+    ctx.font = '13px sans-serif'
+    const cmds = card.cmds || []
+    let cy = y + 44
+    for (let i = 0; i < cmds.length; i += 3) {
+      const chunk = cmds.slice(i, i + 3)
+      const line = chunk.map((c) => p + c).join('   ')
+      ctx.fillText(line, x + 16, cy)
+      cy += lineH
+    }
+  }
+
+  // footer
+  ctx.fillStyle = C.muted
+  ctx.font = '13px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(`Voltar: ${p}menu   •   ⊱🩸 gótico / sombrio 🦇⊰`, w / 2, h - 28)
+
+  return save(canvas, 'brincadeiras')
+}
+
+
 module.exports = {
   drawVelha,
   drawForca,
@@ -635,5 +748,6 @@ module.exports = {
   drawInteract,
   drawShip,
   drawRank,
-  drawQuote
+  drawQuote,
+  drawBrincadeirasMenu
 }
