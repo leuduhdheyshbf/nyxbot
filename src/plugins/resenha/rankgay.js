@@ -3,7 +3,7 @@
 const fs = require('fs')
 const { drawRank } = require('../../modules/games/imageBoard')
 const { safeUnlink, cleanNumber } = require('../../utils/helpers')
-const { pickRank, medal } = require('../../utils/rankHelper')
+const { pickRank, medal, collectContacts } = require('../../utils/rankHelper')
 
 module.exports = {
   name: 'rankgay',
@@ -24,7 +24,7 @@ module.exports = {
     await reagir('🏳️‍🌈')
 
     const botNum = cleanNumber(client?.user?.id || sock?.user?.id)
-    const contacts = client?.contacts || sock?.contacts || {}
+    const contacts = collectContacts(client, sock)
     const items = pickRank(participants, { botNum, size: 5, contacts })
     if (items.length < 3) return reply('❌ Membros insuficientes.')
 
