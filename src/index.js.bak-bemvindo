@@ -87,4 +87,3 @@ main().catch((e) => {
   RedLog(e.message)
   process.exit(1)
 })
-const { handleGroupUpdate } = require('./handlers/groupUpdateHandler');
