@@ -9,7 +9,7 @@ const { createCanvas } = require('canvas')
 const path = require('path')
 const fs = require('fs')
 const { ensureDir, getRandom } = require('../../utils/helpers')
-const { fetchCardImage } = require('../../utils/cardApi')
+const { fetchCardImage, generateBg } = require('../../utils/cardApi')
 
 const ROOT = path.join(__dirname, '..', '..', '..')
 const TEMP = path.join(ROOT, 'temp')
@@ -570,41 +570,68 @@ async function drawShip({ p1 = 'A', p2 = 'B', percent = 50 }) {
 async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   const list = (items || []).slice(0, 10)
   const n = Math.max(1, list.length)
-  const w = 520
-  const rowH = 56
-  const headerH = 86
-  const h = headerH + n * rowH + 28
+
+  let bgPath = null
+  try {
+    bgPath = await generateBg({ mood: 'rank' })
+  } catch (e) {
+    console.error('[drawRank] bg:', e.message)
+  }
+
+  const w = 720
+  const rowH = 58
+  const headerH = 110
+  const h = Math.max(720, headerH + n * rowH + 80)
   const canvas = createCanvas(w, h)
   const ctx = canvas.getContext('2d')
-  fillBg(ctx, w, h)
+
+  if (bgPath) {
+    try {
+      const { loadImage } = require('canvas')
+      const img = await loadImage(bgPath)
+      const scale = Math.max(w / img.width, h / img.height)
+      const iw = img.width * scale
+      const ih = img.height * scale
+      ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih)
+      try { fs.unlinkSync(bgPath) } catch {}
+    } catch {
+      fillBg(ctx, w, h)
+    }
+  } else {
+    fillBg(ctx, w, h)
+  }
+
+  // overlay escuro
+  ctx.fillStyle = 'rgba(8, 5, 10, 0.72)'
+  ctx.fillRect(0, 0, w, h)
 
   // card
-  roundRect(ctx, 14, 14, w - 28, h - 28, 18)
-  ctx.fillStyle = C.panel
+  roundRect(ctx, 24, 24, w - 48, h - 48, 22)
+  ctx.fillStyle = 'rgba(26, 18, 28, 0.88)'
   ctx.fill()
-  ctx.strokeStyle = C.line
-  ctx.lineWidth = 2
+  ctx.strokeStyle = 'rgba(196,30,58,0.7)'
+  ctx.lineWidth = 2.5
   ctx.stroke()
 
-  // header bar
-  roundRect(ctx, 14, 14, w - 28, 64, 18)
-  ctx.fillStyle = 'rgba(196,30,58,0.22)'
+  // header
+  roundRect(ctx, 24, 24, w - 48, 88, 22)
+  ctx.fillStyle = 'rgba(196,30,58,0.3)'
   ctx.fill()
-  ctx.fillRect(14, 48, w - 28, 30)
+  ctx.fillRect(24, 70, w - 48, 42)
 
   ctx.fillStyle = C.accent
-  ctx.font = 'bold 22px sans-serif'
+  ctx.font = 'bold 28px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 44)
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 58)
   ctx.fillStyle = C.muted
-  ctx.font = '12px sans-serif'
-  ctx.fillText('ranking do grupo', w / 2, 64)
+  ctx.font = '14px sans-serif'
+  ctx.fillText('ranking do grupo', w / 2, 92)
 
   const medals = ['🥇', '🥈', '🥉']
-  let y = headerH
+  let y = headerH + 16
 
   list.forEach((it, i) => {
-    // limpa nome: se parecer telefone/LID, usa Top N
     let name = String(it.name || '').trim()
     const looksPhone = !name ||
       /^\+?\d/.test(name) ||
@@ -613,60 +640,32 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
       name.includes('...') ||
       /^\(\d+\)/.test(name)
     if (looksPhone) name = `Top ${i + 1}`
-    if (name.length > 16) name = name.slice(0, 15) + '…'
+    if (name.length > 18) name = name.slice(0, 17) + '…'
 
-    const percent = Math.max(0, Math.min(100,
-      parseInt(String(it.value != null ? it.value : '0').replace(/\D/g, ''), 10) || 0
-    ))
+    const percent = it.percent != null ? Number(it.percent) : null
+    const value = it.value != null ? String(it.value) : (percent != null ? percent + '%' : '')
 
-    // row background
-    roundRect(ctx, 28, y, w - 56, rowH - 10, 12)
-    if (i === 0) ctx.fillStyle = 'rgba(212,175,55,0.16)'
-    else if (i === 1) ctx.fillStyle = 'rgba(192,192,192,0.10)'
-    else if (i === 2) ctx.fillStyle = 'rgba(205,127,50,0.10)'
-    else ctx.fillStyle = i % 2 === 0 ? C.cell : 'rgba(0,0,0,0.14)'
+    // row bg
+    roundRect(ctx, 40, y, w - 80, rowH - 8, 12)
+    ctx.fillStyle = i < 3 ? 'rgba(196,30,58,0.18)' : 'rgba(255,255,255,0.04)'
     ctx.fill()
 
-    // medal
+    const medal = medals[i] || `${i + 1}.`
+    ctx.font = '24px sans-serif'
     ctx.textAlign = 'left'
-    if (i < 3) {
-      ctx.font = '24px sans-serif'
-      ctx.fillText(medals[i], 38, y + 32)
-    } else {
-      ctx.fillStyle = C.muted
-      ctx.font = 'bold 16px sans-serif'
-      ctx.fillText(String(i + 1), 46, y + 32)
-    }
-
-    // name / Top N
+    ctx.textBaseline = 'middle'
     ctx.fillStyle = C.text
-    ctx.font = i === 0 ? 'bold 15px sans-serif' : '14px sans-serif'
-    ctx.fillText(name, 74, y + 22)
+    ctx.fillText(medal, 56, y + (rowH - 8) / 2)
 
-    // bar
-    const barX = 74
-    const barY = y + 30
-    const barW = w - 160
-    const barH = 10
-    roundRect(ctx, barX, barY, barW, barH, 5)
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'
-    ctx.fill()
+    ctx.font = 'bold 20px sans-serif'
+    ctx.fillText(name, 110, y + (rowH - 8) / 2)
 
-    const fillW = Math.max(8, Math.floor((percent / 100) * barW))
-    roundRect(ctx, barX, barY, fillW, barH, 5)
-    const g = ctx.createLinearGradient(barX, 0, barX + barW, 0)
-    if (i === 0) { g.addColorStop(0, '#f0d78c'); g.addColorStop(1, '#c41e3a') }
-    else if (i === 1) { g.addColorStop(0, '#e8e8e8'); g.addColorStop(1, '#8a6a75') }
-    else if (i === 2) { g.addColorStop(0, '#e8a86b'); g.addColorStop(1, '#5c2a3a') }
-    else { g.addColorStop(0, '#e85a6b'); g.addColorStop(1, '#5c2a3a') }
-    ctx.fillStyle = g
-    ctx.fill()
-
-    // percent
-    ctx.textAlign = 'right'
-    ctx.fillStyle = i === 0 ? C.gold : C.text
-    ctx.font = 'bold 18px sans-serif'
-    ctx.fillText(percent + '%', w - 36, y + 34)
+    if (value) {
+      ctx.textAlign = 'right'
+      ctx.fillStyle = i === 0 ? C.gold : C.accent
+      ctx.font = 'bold 20px sans-serif'
+      ctx.fillText(value, w - 56, y + (rowH - 8) / 2)
+    }
 
     y += rowH
   })
@@ -676,53 +675,89 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
 
 
 async function drawQuote({ title = 'NYX', emoji = '✨', text = '', exact = false } = {}) {
-  // 1) APIs externas (Pollinations / placehold)
-  // exact=true → prioriza texto legível (placehold); false → IA visual
-  try {
-    const apiFile = await fetchCardImage({ title, emoji, text, exact: !!exact })
-    if (apiFile) return apiFile
-  } catch (e) {
-    console.error('[drawQuote] api:', e.message)
+  // Imagem bonita (IA) + texto legível por cima
+  let bgPath = null
+  if (!exact) {
+    try {
+      bgPath = await generateBg({ mood: 'quote' })
+    } catch (e) {
+      console.error('[drawQuote] bg:', e.message)
+    }
   }
 
-  // 2) Fallback local (canvas)
-  const w = 560
-  const padX = 36
-  const maxTextW = w - padX * 2 - 16
+  const w = 720
+  const padX = 44
+  const maxTextW = w - padX * 2 - 20
 
   const measure = createCanvas(10, 10).getContext('2d')
-  measure.font = '20px sans-serif'
+  measure.font = 'bold 26px sans-serif'
   const lines = wrapText(measure, String(text || ''), maxTextW)
-  const lineH = 28
-  const headerH = 78
-  const footerPad = 36
-  const h = Math.max(220, headerH + lines.length * lineH + footerPad)
+  const lineH = 36
+  const headerH = 100
+  const boxPad = 28
+  const textBlockH = lines.length * lineH + boxPad * 2
+  const h = 720
 
   const canvas = createCanvas(w, h)
   const c = canvas.getContext('2d')
-  fillBg(c, w, h)
 
-  roundRect(c, 16, 16, w - 32, h - 32, 18)
-  c.fillStyle = C.panel
+  // fundo
+  if (bgPath) {
+    try {
+      const { loadImage } = require('canvas')
+      const img = await loadImage(bgPath)
+      // cover
+      const scale = Math.max(w / img.width, h / img.height)
+      const iw = img.width * scale
+      const ih = img.height * scale
+      c.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih)
+      try { fs.unlinkSync(bgPath) } catch {}
+    } catch (e) {
+      fillBg(c, w, h)
+    }
+  } else {
+    fillBg(c, w, h)
+  }
+
+  // vinheta escura
+  const g = c.createLinearGradient(0, 0, 0, h)
+  g.addColorStop(0, 'rgba(0,0,0,0.35)')
+  g.addColorStop(0.45, 'rgba(0,0,0,0.15)')
+  g.addColorStop(0.7, 'rgba(0,0,0,0.55)')
+  g.addColorStop(1, 'rgba(0,0,0,0.85)')
+  c.fillStyle = g
+  c.fillRect(0, 0, w, h)
+
+  // painel de texto na parte de baixo
+  const boxY = h - textBlockH - 70
+  roundRect(c, 28, boxY, w - 56, textBlockH + 50, 18)
+  c.fillStyle = 'rgba(15, 10, 16, 0.82)'
   c.fill()
-  c.strokeStyle = C.line
+  c.strokeStyle = 'rgba(196,30,58,0.65)'
   c.lineWidth = 2
   c.stroke()
 
-  roundRect(c, 16, 16, w - 32, 58, 18)
-  c.fillStyle = 'rgba(196,30,58,0.2)'
-  c.fill()
-  c.fillRect(16, 40, w - 32, 34)
-
+  // título
   c.fillStyle = C.accent
-  c.font = 'bold 20px sans-serif'
+  c.font = 'bold 22px sans-serif'
   c.textAlign = 'center'
-  c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
+  c.textBaseline = 'middle'
+  c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, boxY + 28)
 
+  // linha
+  c.strokeStyle = 'rgba(196,30,58,0.4)'
+  c.lineWidth = 1
+  c.beginPath()
+  c.moveTo(60, boxY + 46)
+  c.lineTo(w - 60, boxY + 46)
+  c.stroke()
+
+  // frase
   c.fillStyle = C.text
-  c.font = '20px sans-serif'
+  c.font = 'bold 26px sans-serif'
   c.textAlign = 'center'
-  let y = headerH + 8
+  c.textBaseline = 'top'
+  let y = boxY + 58
   for (const line of lines) {
     c.fillText(line, w / 2, y)
     y += lineH
@@ -730,7 +765,6 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '', exact = fals
 
   return save(canvas, 'quote')
 }
-
 
 async function drawBrincadeirasMenu({ prefix = '.', sections = [] } = {}) {
   const p = prefix || '.'

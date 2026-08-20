@@ -1,8 +1,7 @@
 'use strict'
 
 /**
- * .cantada — manda uma cantada com card visual
- * Usa placehold/canvas (texto fiel). Sem imagem IA aleatória.
+ * .cantada — cantada com imagem IA gótica + texto legível
  */
 
 const fs = require('fs')
@@ -40,8 +39,8 @@ module.exports = {
     const caption = `💘 *Cantada*\n\n${text}`
 
     try {
-      // exact: true → placehold/canvas (texto legível), sem IA aleatória
-      const img = await drawQuote({ title: 'Cantada', emoji: '💘', text, exact: true })
+      // exact:false → fundo IA bonito + texto canvas por cima
+      const img = await drawQuote({ title: 'Cantada', emoji: '💘', text, exact: false })
       await client.sendMessage(
         from,
         { image: fs.readFileSync(img), caption },
