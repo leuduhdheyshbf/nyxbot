@@ -7,18 +7,89 @@ const { toJid, cleanNumber, getGroupAdmins, sameUser, isParticipantAdmin, isPart
 const levels = require('../modules/levels')
 const economy = require('../modules/economy')
 
+/** Desembrulha ephemeral / viewOnce / documentWithCaption / edited etc. */
+function unwrapMessage(msg) {
+  if (!msg || typeof msg !== 'object') return msg
+  let cur = msg
+  for (let i = 0; i < 6; i++) {
+    const next =
+      cur.ephemeralMessage?.message ||
+      cur.viewOnceMessage?.message ||
+      cur.viewOnceMessageV2?.message ||
+      cur.viewOnceMessageV2Extension?.message ||
+      cur.documentWithCaptionMessage?.message ||
+      cur.editedMessage?.message ||
+      null
+    if (!next || next === cur) break
+    cur = next
+  }
+  return cur
+}
+
 function getMessageBody(msg) {
   if (!msg) return ''
-    return (
-      msg.conversation ||
-      msg.extendedTextMessage?.text ||
-      msg.imageMessage?.caption ||
-      msg.videoMessage?.caption ||
-      msg.documentMessage?.caption ||
-      msg.buttonsResponseMessage?.selectedDisplayText ||
-      msg.listResponseMessage?.title ||
-      ''
-    )
+  const m = unwrapMessage(msg) || msg
+  return (
+    m.conversation ||
+    m.extendedTextMessage?.text ||
+    m.imageMessage?.caption ||
+    m.videoMessage?.caption ||
+    m.documentMessage?.caption ||
+    m.buttonsResponseMessage?.selectedDisplayText ||
+    m.listResponseMessage?.title ||
+    m.templateButtonReplyMessage?.selectedDisplayText ||
+    m.interactiveResponseMessage?.body?.text ||
+    m.buttonsMessage?.contentText ||
+    m.templateMessage?.hydratedTemplate?.hydratedContentText ||
+    m.groupInviteMessage?.caption ||
+    m.groupInviteMessage?.groupName ||
+    ''
+  )
+}
+
+const LINK_RE = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(wa\.me\/[^\s]+)|(chat\.whatsapp\.com\/[^\s]+)/i
+
+/** Detecta link no texto OU em qualquer campo relevante da mensagem (convite de grupo, preview, etc.) */
+function messageHasLink(msg, body) {
+  if (body && LINK_RE.test(body)) return true
+  if (!msg) return false
+  try {
+    const m = unwrapMessage(msg) || msg
+    // convite nativo de grupo do WhatsApp
+    if (m.groupInviteMessage) return true
+    // inviteCode / groupJid dentro do objeto
+    if (m.groupInviteMessage?.inviteCode) return true
+    // varre strings úteis (não o message inteiro pra não pegar false positive em media keys)
+    const parts = [
+      m.extendedTextMessage?.text,
+      m.extendedTextMessage?.matchedText,
+      m.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl,
+      m.extendedTextMessage?.contextInfo?.externalAdReply?.mediaUrl,
+      m.extendedTextMessage?.contextInfo?.externalAdReply?.thumbnailUrl,
+      m.imageMessage?.caption,
+      m.videoMessage?.caption,
+      m.documentMessage?.caption,
+      m.conversation,
+      m.groupInviteMessage?.inviteCode,
+      m.groupInviteMessage?.groupJid,
+      m.groupInviteMessage?.caption,
+      m.templateMessage?.hydratedTemplate?.hydratedContentText,
+      m.buttonsMessage?.contentText
+    ]
+    for (const p of parts) {
+      if (p && LINK_RE.test(String(p))) return true
+      if (p && /chat\.whatsapp\.com|wa\.me\//i.test(String(p))) return true
+    }
+    // fallback: JSON raso só com campos de texto conhecidos
+    const raw = JSON.stringify({
+      t: m.extendedTextMessage?.text,
+      c: m.conversation,
+      g: m.groupInviteMessage,
+      cap: m.imageMessage?.caption || m.videoMessage?.caption
+    })
+    if (LINK_RE.test(raw) || /chat\.whatsapp\.com|wa\.me\//i.test(raw)) return true
+  } catch {}
+  return false
 }
 
 function createCtx(sock, info, config, cmdManager) {
@@ -210,12 +281,44 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                 }
               }
 
-              // antilink simples
-              if (ctx.isGroup && !ctx.isAdmin && ctx.isBotAdmin) {
-                const feats = db.getFeatures()
-                if (feats.antilink && /(https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com)/i.test(body)) {
+              // antilink (detecta texto, convite nativo de grupo, preview, etc.)
+              if (ctx.isGroup && !ctx.isAdmin) {
+                const antilinkOn = typeof db.getGroupFeature === 'function'
+                  ? db.getGroupFeature(ctx.from, 'antilink')
+                  : !!(db.getFeatures() || {}).antilink
+                if (antilinkOn && messageHasLink(info.message, body)) {
+                  if (!ctx.isBotAdmin) {
+                    // bot precisa ser admin para apagar; avisa só uma vez por grupo (evita spam)
+                    try {
+                      const key = `antilink_need_admin:${ctx.from}`
+                      if (!global.__nyxAntilinkWarn) global.__nyxAntilinkWarn = new Set()
+                      if (!global.__nyxAntilinkWarn.has(key)) {
+                        global.__nyxAntilinkWarn.add(key)
+                        await sock.sendMessage(ctx.from, {
+                          text: '⚠️ *Antilink ativo*, mas o bot precisa ser *admin* do grupo para apagar links.'
+                        })
+                      }
+                    } catch {}
+                    return
+                  }
                   try {
                     await sock.sendMessage(ctx.from, { delete: info.key })
+                  } catch (e) {
+                    try {
+                      // tenta com participant explícito (alguns clients exigem)
+                      await sock.sendMessage(ctx.from, {
+                        delete: {
+                          remoteJid: ctx.from,
+                          fromMe: false,
+                          id: info.key.id,
+                          participant: info.key.participant || info.key.participantAlt || ctx.sender
+                        }
+                      })
+                    } catch (e2) {
+                      RedLog(`antilink delete: ${e2.message || e.message}`)
+                    }
+                  }
+                  try {
                     await sock.sendMessage(ctx.from, { text: '🔗 Link removido (antilink).' })
                   } catch {}
                   return

@@ -203,7 +203,20 @@ async function hydrateAll() {
       for (const r of donosR.data) if (r.jid) donosSet.add(r.jid)
     }
     if (featR.data) {
-      for (const r of featR.data) featuresCache[r.key] = !!r.value
+      for (const r of featR.data) {
+        featuresCache[r.key] = !!r.value
+        // group:<groupId>:<featureKey>
+        if (typeof r.key === 'string' && r.key.startsWith('group:')) {
+          const parts = r.key.split(':')
+          if (parts.length >= 3) {
+            const gid = parts[1]
+            const fkey = parts.slice(2).join(':')
+            if (!featuresCache.groupFeatures) featuresCache.groupFeatures = {}
+            if (!featuresCache.groupFeatures[gid]) featuresCache.groupFeatures[gid] = {}
+            featuresCache.groupFeatures[gid][fkey] = !!r.value
+          }
+        }
+      }
     }
     if (prefR.data) {
       for (const r of prefR.data) prefixCache.set(r.group_id, r.prefix)
@@ -457,6 +470,51 @@ async function setFeature(key, value) {
   }
   const f = load('features')
   f[key] = !!value
+  markDirty('features')
+}
+
+/**
+ * Feature por grupo (ex: antilink).
+ * Estrutura em features.json:
+ *   groupFeatures: { [groupId]: { antilink: true, ... } }
+ * Fallback: se groupFeatures não existir, usa o flag global legado (feats.antilink).
+ */
+function getGroupFeature(groupId, key) {
+  if (!groupId || !key) return false
+  const f = getFeatures() || {}
+  const map = f.groupFeatures
+  if (map && typeof map === 'object' && map[groupId] && typeof map[groupId] === 'object') {
+    if (Object.prototype.hasOwnProperty.call(map[groupId], key)) {
+      return !!map[groupId][key]
+    }
+  }
+  // legado: feature global
+  return !!f[key]
+}
+
+async function setGroupFeature(groupId, key, value) {
+  if (!groupId || !key) return
+  const f = load('features')
+  if (!f.groupFeatures || typeof f.groupFeatures !== 'object') f.groupFeatures = {}
+  if (!f.groupFeatures[groupId] || typeof f.groupFeatures[groupId] !== 'object') {
+    f.groupFeatures[groupId] = {}
+  }
+  f.groupFeatures[groupId][key] = !!value
+  // espelha no cache em memória
+  if (!featuresCache.groupFeatures) featuresCache.groupFeatures = {}
+  if (!featuresCache.groupFeatures[groupId]) featuresCache.groupFeatures[groupId] = {}
+  featuresCache.groupFeatures[groupId][key] = !!value
+  if (USE_SUPABASE) {
+    // guarda como chave composta no bot_features (sem migrar schema)
+    const composite = `group:${groupId}:${key}`
+    featuresCache[composite] = !!value
+    const { error } = await supabase
+      .from('bot_features')
+      .upsert({ key: composite, value: !!value }, { onConflict: 'key' })
+    if (error) RedLog(`[Supabase] setGroupFeature: ${error.message}`)
+    markDirty('features')
+    return
+  }
   markDirty('features')
 }
 
@@ -757,6 +815,8 @@ module.exports = {
   // features
   getFeatures,
   setFeature,
+  getGroupFeature,
+  setGroupFeature,
   // prefix
   getGroupPrefix,
   setGroupPrefix,
