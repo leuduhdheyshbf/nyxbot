@@ -711,6 +711,27 @@ process.on('SIGTERM', () => {
   setTimeout(() => process.exit(0), 800)
 })
 
+
+async function listActiveGroupsSupabase() {
+  const { data, error } = await supabase
+    .from('active_groups')
+    .select('*')
+    .eq('active', true)
+  if (error) {
+    console.error('[Supabase] listActiveGroups:', error)
+    return []
+  }
+  const now = Date.now()
+  return (data || [])
+    .filter((g) => !g.expires_at || g.expires_at > now)
+    .map((g) => ({
+      id: g.group_id,
+      expires: g.expires_at,
+      active: g.active,
+      days: g.expires_at ? Math.ceil((g.expires_at - now) / (24 * 60 * 60 * 1000)) : null
+    }))
+}
+
 module.exports = {
   load,
   markDirty,

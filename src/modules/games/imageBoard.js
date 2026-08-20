@@ -58,6 +58,15 @@ function fillBg(ctx, w, h) {
   ctx.fillRect(0, 0, w, h)
 }
 
+
+/** Remove emojis — node-canvas não renderiza e vira tofu (01F xxx) */
+function stripEmoji(s) {
+  return String(s || '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 async function drawVelha(board = Array(9).fill(null)) {
   const size = 540
   const pad = 28
@@ -446,7 +455,7 @@ async function drawMeter({ title = 'MEDIDOR', emoji = '📊', name = 'Alguém', 
   ctx.fillStyle = C.accent
   ctx.font = 'bold 18px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 60)
+  ctx.fillText(stripEmoji(String(title).toUpperCase()), w / 2, 60)
 
   ctx.fillStyle = C.text
   ctx.font = 'bold 26px sans-serif'
@@ -623,12 +632,12 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   ctx.font = 'bold 28px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 58)
+  ctx.fillText(stripEmoji(String(title).toUpperCase()), w / 2, 58)
   ctx.fillStyle = C.muted
   ctx.font = '14px sans-serif'
   ctx.fillText('ranking do grupo', w / 2, 92)
 
-  const medals = ['🥇', '🥈', '🥉']
+  const medals = ['#1', '#2', '#3']
   let y = headerH + 16
 
   list.forEach((it, i) => {
@@ -686,7 +695,7 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '', exact = fals
 
   const measure = createCanvas(10, 10).getContext('2d')
   measure.font = 'bold 26px sans-serif'
-  const lines = wrapText(measure, String(text || ''), maxTextW)
+  const lines = wrapText(measure, stripEmoji(String(text || '')), maxTextW)
   const lineH = 36
   const headerH = 100
   const boxPad = 28
@@ -737,7 +746,7 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '', exact = fals
   c.font = 'bold 22px sans-serif'
   c.textAlign = 'center'
   c.textBaseline = 'middle'
-  c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, boxY + 28)
+  c.fillText(stripEmoji(String(title).toUpperCase()), w / 2, boxY + 28)
 
   // linha
   c.strokeStyle = 'rgba(196,30,58,0.4)'
@@ -844,7 +853,7 @@ async function drawBrincadeirasMenu({ prefix = '.', sections = [] } = {}) {
     ctx.fillStyle = C.gold
     ctx.font = 'bold 15px sans-serif'
     ctx.textAlign = 'left'
-    ctx.fillText(`${card.emoji || '✦'}  ${String(card.title || '').toUpperCase()}`, x + 16, y + 24)
+    ctx.fillText(`${stripEmoji(String(card.title || '').toUpperCase()) || '•'}`, x + 16, y + 24)
 
     // commands in 3 columns inside card
     ctx.fillStyle = C.text

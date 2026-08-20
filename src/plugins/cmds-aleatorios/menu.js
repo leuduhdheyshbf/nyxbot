@@ -25,21 +25,50 @@ module.exports = {
   aliases: ['help', 'ajuda', 'commands', 'comandos'],
   cooldown: 4,
 
-  async execute({ client, from, info, prefix, reply, cmdManager, config }) {
+  async execute({ client, from, info, prefix, reply, cmdManager, config, isDono, isAdmin, isGroup, sender, db }) {
     const p = prefix || '.'
     const total = cmdManager?.allUnique?.()?.length || '—'
     const botName = config?.NomeDoBot || 'Nyx Bot'
     const pushname = info.pushName || 'Usuário'
-    const sender = info.key.participant || info.key.remoteJid || 'Desconhecido'
+    const ownerName = config?.NomeDoDono || 'Dono'
 
-    // Pegando o ping (latência)
+    // Ping
     const start = Date.now()
     const ping = Date.now() - start
 
-    // Simulando VIP, Cargo e Dono (você pode substituir pelos dados reais do seu banco)
-    const vipStatus = '❌' // ou '✅'
-    const cargo = 'Membro'
-    const ownerName = 'LCSX'
+    // VIP real
+    let vipStatus = '❌'
+    try {
+      const donoJids = Array.isArray(config?.NumeroDoDono)
+        ? config.NumeroDoDono
+        : [config?.NumeroDoDono]
+      if (db && typeof db.isPremium === 'function' && db.isPremium(sender, donoJids)) {
+        vipStatus = '✅'
+      }
+      if (isDono) vipStatus = '✅'
+    } catch {}
+
+    // Cargo real
+    let cargo = 'Membro'
+    if (isDono) cargo = 'Dono'
+    else if (isAdmin) cargo = 'Admin'
+    else if (vipStatus === '✅') cargo = 'VIP'
+
+    // Uptime real
+    const up = process.uptime()
+    const d = Math.floor(up / 86400)
+    const h = Math.floor((up % 86400) / 3600)
+    const m = Math.floor((up % 3600) / 60)
+    const uptime =
+      d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m} min`
+
+    // Baileys version from package if possible
+    let baileysVer = '7.x'
+    try {
+      baileysVer = require('@whiskeysockets/baileys/package.json').version || baileysVer
+    } catch {}
+
+    const modoMembro = isGroup ? (isAdmin || isDono ? 'Não ❌' : 'Sim ✅') : 'PV'
 
     const caption = `
     ┏╾═╼°❀•° ⊱🩸⊰ °•❀°╾═╼┓
@@ -58,9 +87,9 @@ module.exports = {
     ┃╎ ➮ 🤖 𝐁𝐨𝐭: ${botName}
     ┃╎ ➮ ⚡ 𝐏𝐫𝐞𝐟𝐢𝐱𝐨: ${p}
     ┃╎ ➮ 🚀 𝐏𝐢𝐧𝐠: ${ping} ms
-    ┃╎ ➮ 📦 𝐁𝐚𝐢𝐥𝐞𝐲𝐬: 7.0.0-rc13
-    ┃╎ ➮ ⏳ 𝐔𝐩𝐭𝐢𝐦𝐞: 51 ᴍɪɴ
-    ┃╎ ➮ 🔒 𝐌𝐨𝐝𝐨 𝐌𝐞𝐦𝐛𝐫𝐨: Sim ✅
+    ┃╎ ➮ 📦 𝐁𝐚𝐢𝐥𝐞𝐲𝐬: ${baileysVer}
+    ┃╎ ➮ ⏳ 𝐔𝐩𝐭𝐢𝐦𝐞: ${uptime}
+    ┃╎ ➮ 🔒 𝐌𝐨𝐝𝐨 𝐌𝐞𝐦𝐛𝐫𝐨: ${modoMembro}
     ┃╎
     ┃╰╾═╼〔 • 👑 • 〕╾═╼╯
     ├╾═╼･ﾟ𖤐ﾟ･｡👑｡･ﾟ𖤐ﾟ･╾═╼┛
