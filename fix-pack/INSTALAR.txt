@@ -1,0 +1,18 @@
+Copie estes arquivos para a raiz do Nyx Bot V2 (sobrescrevendo):
+
+  src/plugins/admin/mute.js
+  src/plugins/admin/unmute.js
+  src/plugins/admin/mutetempo.js
+  src/plugins/admin/antilink.js
+  src/plugins/resenha/chute.js
+  src/handlers/messageHandler.js
+  src/utils/gifUtils.js
+
+Depois: commit + redeploy no Render.
+
+Comandos:
+  .mute @pessoa
+  .unmute @pessoa
+  .mutetempo 10 @pessoa
+  .antilink on
+  .chute @pessoa
