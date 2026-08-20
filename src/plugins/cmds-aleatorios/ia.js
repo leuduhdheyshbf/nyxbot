@@ -1,20 +1,26 @@
-// plugins/cmds-aleatorios/ia.js
+'use strict'
+
+/**
+ * .ia — Conversa com IA (DeepSeek / Gemini + fallbacks)
+ * Usa chaves de ambiente: DEEPSEEK_API_KEY, GEMINI_API_KEY, etc.
+ * Histórico por usuário em conversas_ia.json
+ */
+
 const fs = require('fs')
 const path = require('path')
 const axios = require('axios')
-
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-7c1d9c521b8f4c12abe5d81126e17604'
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyB93z6L_gVHHIyBmwFxQARqrpw1EkaCr5g'
 
 const HISTORY_FILE = path.join(process.cwd(), 'conversas_ia.json')
 const MAX_HISTORY = 20
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions'
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
-const SYSTEM_PROMPT = `Você é a IA do Nyx Bot V1. Responda sempre em português, de forma direta, intensa e com estética dark/edgy. Use bordas ▬ ➤ ═ quando fizer sentido, mas sem exagerar. Seja útil e objetiva.`
+const SYSTEM_PROMPT =
+  'Você é a IA do Nyx Bot V2. Responda sempre em português brasileiro, de forma direta, intensa e com estética dark/edgy. Use bordas ▬ ➤ ═ quando fizer sentido, mas sem exagerar. Seja útil e objetiva.'
 
-const delay = (ms) => new Promise(res => setTimeout(res, ms))
+const delay = (ms) => new Promise((res) => setTimeout(res, ms))
 
 function loadData() {
   try {
@@ -52,7 +58,7 @@ function setHistory(userId, model, messages) {
 function clearHistory(userId) {
   const data = loadData()
   const uid = String(userId)
-  Object.keys(data).forEach(k => {
+  Object.keys(data).forEach((k) => {
     if (k.startsWith(uid + '_') || k === `last_${uid}`) delete data[k]
   })
   saveData(data)
@@ -76,17 +82,28 @@ ${footer ? `\n➤ ${footer}` : ''}
 `.trim()
 }
 
+function getDeepSeekKey() {
+  return process.env.DEEPSEEK_API_KEY || ''
+}
+
+function getGeminiKey() {
+  return process.env.GEMINI_API_KEY || ''
+}
+
 async function askDeepSeek(history, userText) {
+  const key = getDeepSeekKey()
+  if (!key) throw new Error('DEEPSEEK_API_KEY não configurada')
+
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...history.map(m => ({ role: m.role, content: m.text })),
+    ...history.map((m) => ({ role: m.role, content: m.text })),
     { role: 'user', content: userText }
   ]
 
   const res = await axios.post(
     DEEPSEEK_URL,
     {
-      model: 'deepseek-chat',
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
       messages,
       temperature: 0.8,
       max_tokens: 1024
@@ -94,7 +111,7 @@ async function askDeepSeek(history, userText) {
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`
+        Authorization: `Bearer ${key}`
       },
       timeout: 45000
     }
@@ -104,6 +121,9 @@ async function askDeepSeek(history, userText) {
 }
 
 async function askGemini(history, userText) {
+  const key = getGeminiKey()
+  if (!key) throw new Error('GEMINI_API_KEY não configurada')
+
   const contents = []
 
   for (const msg of history) {
@@ -119,7 +139,7 @@ async function askGemini(history, userText) {
   })
 
   const res = await axios.post(
-    `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
+    `${GEMINI_URL}?key=${key}`,
     {
       contents,
       generationConfig: {
@@ -133,10 +153,7 @@ async function askGemini(history, userText) {
     }
   )
 
-  return (
-    res?.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    ''
-  ).trim()
+  return (res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
 }
 
 async function askIA(model, history, userText) {
@@ -144,12 +161,14 @@ async function askIA(model, history, userText) {
     return { model: 'gemini', text: await askGemini(history, userText) }
   }
 
+  // deepseek com fallback automático para gemini
   try {
     const text = await askDeepSeek(history, userText)
     if (!text) throw new Error('resposta vazia deepseek')
     return { model: 'deepseek', text }
   } catch (e) {
-    console.error('[ia] deepseek falhou, fallback gemini:', e?.response?.data || e.message)
+    console.error('[ia] deepseek falhou, tentando gemini:', e?.response?.data || e.message)
+    if (!getGeminiKey()) throw e
     const text = await askGemini(history, userText)
     return { model: 'gemini', text }
   }
@@ -160,37 +179,51 @@ module.exports = {
   description: 'Converse com a DeepSeek ou Gemini',
   category: 'cmds-aleatorios',
   aliases: ['deepseek', 'gemini', 'ai', 'conversar'],
-  async execute({ nyx, from, info, prefix, args, sender }) {
+  cooldown: 5,
+
+  async execute({ nyx, client, from, info, prefix, args, sender, reply }) {
+    const sock = nyx || client
     const p = prefix || '.'
     const userId = sender || from
-    const raw = (args || []).map(a => String(a)).join(' ').trim()
+    const raw = (args || []).map((a) => String(a)).join(' ').trim()
     const first = (args?.[0] || '').toLowerCase()
+
+    const send = async (text) => {
+      try {
+        await sock.sendMessage(from, { text }, { quoted: info })
+      } catch {
+        if (typeof reply === 'function') await reply(text)
+        else await sock.sendMessage(from, { text })
+      }
+    }
 
     if (first === 'sair' || first === 'limpar' || first === 'reset') {
       clearHistory(userId)
-      return nyx.sendMessage(from, {
-        text: frame(
+      return send(
+        frame(
           '⚔ 𝗜𝗔 𝗡𝗬𝗫',
           'Histórico apagado.\nModo conversa desativado.',
           `${p}ia [pergunta] para recomeçar`
         )
-      }, { quoted: info })
+      )
     }
 
     if (!raw) {
-      return nyx.sendMessage(from, {
-        text: frame(
+      const hasDs = !!getDeepSeekKey()
+      const hasGm = !!getGeminiKey()
+      return send(
+        frame(
           '⚔ 𝗜𝗔 𝗡𝗬𝗫',
           `➤ ${p}ia [pergunta]
 ➤ ${p}ia deepseek [pergunta]
 ➤ ${p}ia gemini [pergunta]
 ➤ ${p}ia sair — limpa memória
 
-Modelos: deepseek • gemini
+Modelos: deepseek ${hasDs ? '✅' : '❌'} • gemini ${hasGm ? '✅' : '❌'}
 Fallback automático ativo.`,
-          'Escolha um modelo ou continue a conversa'
+          'Configure DEEPSEEK_API_KEY e/ou GEMINI_API_KEY no ambiente'
         )
-      }, { quoted: info })
+      )
     }
 
     let model = getLastModel(userId)
@@ -202,33 +235,44 @@ Fallback automático ativo.`,
     }
 
     if (!pergunta) {
-      return nyx.sendMessage(from, {
-        text: frame(
+      return send(
+        frame(
           '⚔ 𝗜𝗔 𝗡𝗬𝗫',
           `Faltou a pergunta.\n\n➤ ${p}ia ${model} [sua pergunta]`,
           null
         )
-      }, { quoted: info })
+      )
     }
 
-    if (model === 'deepseek' && (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY.includes('SUA_CHAVE'))) {
-      model = 'gemini'
-    }
-
-    if (model === 'gemini' && (!GEMINI_API_KEY || GEMINI_API_KEY.includes('SUA_CHAVE'))) {
-      return nyx.sendMessage(from, {
-        text: frame(
-          '⚠ 𝗘𝗥𝗥𝗢',
-          'Nenhuma API key configurada.\nDefina DEEPSEEK_API_KEY e/ou GEMINI_API_KEY.',
-          null
+    // Se o modelo escolhido não tem chave, tenta o outro
+    if (model === 'deepseek' && !getDeepSeekKey()) {
+      if (getGeminiKey()) model = 'gemini'
+      else {
+        return send(
+          frame(
+            '⚠ 𝗘𝗥𝗥𝗢',
+            'Nenhuma API key configurada.\nDefina DEEPSEEK_API_KEY e/ou GEMINI_API_KEY no ambiente (env / .env / Render).',
+            null
+          )
         )
-      }, { quoted: info })
+      }
+    }
+
+    if (model === 'gemini' && !getGeminiKey()) {
+      if (getDeepSeekKey()) model = 'deepseek'
+      else {
+        return send(
+          frame(
+            '⚠ 𝗘𝗥𝗥𝗢',
+            'Nenhuma API key configurada.\nDefina DEEPSEEK_API_KEY e/ou GEMINI_API_KEY no ambiente.',
+            null
+          )
+        )
+      }
     }
 
     try {
-      await nyx.sendMessage(from, {
-        text: `⏳ *Consultando ${model}...*`
-      }, { quoted: info })
+      await send(`⏳ *Consultando ${model}...*`)
 
       const history = getHistory(userId, model)
       const result = await askIA(model, history, pergunta)
@@ -239,24 +283,29 @@ Fallback automático ativo.`,
       history.push({ role: 'assistant', text: result.text })
       setHistory(userId, result.model, history)
 
-      await delay(1000)
+      await delay(800)
 
-      await nyx.sendMessage(from, {
-        text: frame(
+      await send(
+        frame(
           `⚔ 𝗡𝗬𝗫 × ${result.model.toUpperCase()}`,
           result.text,
           `${p}ia sair — limpar memória`
         )
-      }, { quoted: info })
+      )
     } catch (e) {
-      console.error('[ia]', e?.response?.data || e.message)
-      await nyx.sendMessage(from, {
-        text: frame(
+      const detail =
+        e?.response?.data?.error?.message ||
+        e?.response?.data?.message ||
+        e.message ||
+        'erro desconhecido'
+      console.error('[ia]', detail, e?.response?.data || '')
+      await send(
+        frame(
           '⚠ 𝗙𝗔𝗟𝗛𝗔 𝗡𝗔 𝗜𝗔',
-          'Não foi possível obter resposta.\nTente novamente em instantes.',
+          `Não foi possível obter resposta.\n\nMotivo: ${detail}\n\nVerifique as API keys e tente novamente.`,
           null
         )
-      }, { quoted: info })
+      )
     }
   }
 }
