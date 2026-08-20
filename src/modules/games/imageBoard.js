@@ -632,14 +632,9 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   let y = headerH + 16
 
   list.forEach((it, i) => {
-    let name = String(it.name || '').trim()
-    const looksPhone = !name ||
-      /^\+?\d/.test(name) ||
-      /\d{4,}/.test(name) ||
-      name.includes('…') ||
-      name.includes('...') ||
-      /^\(\d+\)/.test(name)
-    if (looksPhone) name = `Top ${i + 1}`
+    let name = String(it.name || ('Top ' + (i + 1))).trim()
+    // só vira Top N se for só dígitos longos
+    if (/^\+?\d{6,}$/.test(name)) name = 'Top ' + (i + 1)
     if (name.length > 18) name = name.slice(0, 17) + '…'
 
     const percent = it.percent != null ? Number(it.percent) : null

@@ -3,16 +3,7 @@
 const fs = require('fs')
 const { drawRank } = require('../../modules/games/imageBoard')
 const { safeUnlink, cleanNumber } = require('../../utils/helpers')
-
-function getMentionJid(m) {
-  if (!m) return null
-  if (typeof m === 'string') return m
-  return m.phoneNumber || m.id || m.jid || null
-}
-
-function medal(i) {
-  return ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i] || `${i + 1}.`
-}
+const { pickRank, medal } = require('../../utils/rankHelper')
 
 module.exports = {
   name: 'rankforte',
@@ -33,30 +24,17 @@ module.exports = {
     await reagir('💪')
 
     const botNum = cleanNumber(client?.user?.id || sock?.user?.id)
-    const pool = []
-    for (const m of participants) {
-      const jid = getMentionJid(m)
-      if (!jid) continue
-      if (botNum && cleanNumber(jid) === botNum) continue
-      pool.push(jid)
-    }
-    if (pool.length < 3) return reply('❌ Membros insuficientes.')
+    const contacts = client?.contacts || sock?.contacts || {}
+    const items = pickRank(participants, { botNum, size: 5, contacts })
+    if (items.length < 3) return reply('❌ Membros insuficientes.')
 
-    const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(5, pool.length))
-    const items = picked
-      .map((jid) => ({
-        jid,
-        percent: Math.floor(Math.random() * 41) + 60
-      }))
-      .sort((a, b) => b.percent - a.percent)
-
-    // Imagem limpa: Top 1..5 | Legenda: @menções (nome real no WhatsApp)
-    const rankItems = items.map((it, i) => ({
-      name: 'Top ' + (i + 1),
-      value: it.percent + '%'
+    const rankItems = items.map((it) => ({
+      name: it.name,
+      value: it.percent + '%',
+      percent: it.percent
     }))
 
-    let caption = '💪 *TOP FORTES DO GRUPO*\n'
+    let caption = '💪 *TOP FORTES DO GRUPO*\n\n'
     caption += '━━━━━━━━━━━━━━━━━━\n\n'
     items.forEach((it, i) => {
       caption += medal(i) + ' @' + String(it.jid).split('@')[0] + ' — *' + it.percent + '%*\n'
