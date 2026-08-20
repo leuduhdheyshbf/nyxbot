@@ -249,21 +249,46 @@ async function drawMoeda(lado = 'cara') {
 }
 
 function wrapText(ctx, text, maxWidth) {
-  const words = text.split(/\\s+/)
+  const raw = String(text || '').trim() || ' '
+  const words = raw.split(/\s+/).filter(Boolean)
   const lines = []
   let cur = ''
-  for (const word of words) {
-    const test = cur ? cur + ' ' + word : word
-    if (ctx.measureText(test).width > maxWidth && cur) {
-      lines.push(cur)
-      cur = word
-    } else {
-      cur = test
+
+  const pushWord = (word) => {
+    // quebra palavra longa que não cabe
+    if (ctx.measureText(word).width <= maxWidth) {
+      if (cur) {
+        const test = cur + ' ' + word
+        if (ctx.measureText(test).width <= maxWidth) {
+          cur = test
+        } else {
+          lines.push(cur)
+          cur = word
+        }
+      } else {
+        cur = word
+      }
+      return
     }
+    if (cur) { lines.push(cur); cur = '' }
+    let chunk = ''
+    for (const ch of word) {
+      const t = chunk + ch
+      if (ctx.measureText(t).width > maxWidth && chunk) {
+        lines.push(chunk)
+        chunk = ch
+      } else {
+        chunk = t
+      }
+    }
+    if (chunk) cur = chunk
   }
+
+  for (const w of words) pushWord(w)
   if (cur) lines.push(cur)
-  return lines
+  return lines.length ? lines : [' ']
 }
+
 
 async function drawQuiz({ pergunta, opcoes = [] }) {
   const w = 560
@@ -650,44 +675,56 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
 
 
 async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
-  const w = 520
-  const canvas = createCanvas(w, 240)
-  const ctx = canvas.getContext('2d')
-  // medir texto
-  ctx.font = '20px sans-serif'
-  const lines = wrapText(ctx, String(text || ''), w - 80)
-  const h = Math.max(200, 100 + lines.length * 28 + 40)
-  const canvas2 = createCanvas(w, h)
-  const c = canvas2.getContext('2d')
+  const w = 560
+  const padX = 36
+  const maxTextW = w - padX * 2 - 16
+
+  // medir com a mesma fonte que vamos desenhar
+  const measure = createCanvas(10, 10).getContext('2d')
+  measure.font = '20px sans-serif'
+  const lines = wrapText(measure, String(text || ''), maxTextW)
+  const lineH = 28
+  const headerH = 78
+  const footerPad = 36
+  const h = Math.max(220, headerH + lines.length * lineH + footerPad)
+
+  const canvas = createCanvas(w, h)
+  const c = canvas.getContext('2d')
   fillBg(c, w, h)
-  roundRect(c, 20, 20, w - 40, h - 40, 18)
+
+  // card
+  roundRect(c, 16, 16, w - 32, h - 32, 18)
   c.fillStyle = C.panel
   c.fill()
   c.strokeStyle = C.line
   c.lineWidth = 2
   c.stroke()
 
-  c.fillStyle = C.accent
-  c.font = 'bold 18px sans-serif'
-  c.textAlign = 'center'
-  c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 55)
+  // header strip
+  roundRect(c, 16, 16, w - 32, 58, 18)
+  c.fillStyle = 'rgba(196,30,58,0.2)'
+  c.fill()
+  c.fillRect(16, 40, w - 32, 34)
 
+  c.fillStyle = C.accent
+  c.font = 'bold 20px sans-serif'
+  c.textAlign = 'center'
+  c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
+
+  // texto completo, sem cortar
   c.fillStyle = C.text
   c.font = '20px sans-serif'
-  let y = 100
-  for (const line of lines.slice(0, 8)) {
+  c.textAlign = 'center'
+  let y = headerH + 8
+  for (const line of lines) {
     c.fillText(line, w / 2, y)
-    y += 28
+    y += lineH
   }
 
-  return save(canvas2, 'quote')
+  return save(canvas, 'quote')
 }
 
 
-/**
- * Menu visual de brincadeiras — cards góticos por categoria
- * sections: [{ title, emoji, cmds: string[] }]
- */
 async function drawBrincadeirasMenu({ prefix = '.', sections = [] } = {}) {
   const p = prefix || '.'
   const cols = 2
