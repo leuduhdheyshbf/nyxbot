@@ -9,6 +9,7 @@ const { createCanvas } = require('canvas')
 const path = require('path')
 const fs = require('fs')
 const { ensureDir, getRandom } = require('../../utils/helpers')
+const { fetchCardImage } = require('../../utils/cardApi')
 
 const ROOT = path.join(__dirname, '..', '..', '..')
 const TEMP = path.join(ROOT, 'temp')
@@ -675,11 +676,19 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
 
 
 async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
+  // 1) APIs externas (Pollinations / placehold)
+  try {
+    const apiFile = await fetchCardImage({ title, emoji, text, exact: false })
+    if (apiFile) return apiFile
+  } catch (e) {
+    console.error('[drawQuote] api:', e.message)
+  }
+
+  // 2) Fallback local (canvas)
   const w = 560
   const padX = 36
   const maxTextW = w - padX * 2 - 16
 
-  // medir com a mesma fonte que vamos desenhar
   const measure = createCanvas(10, 10).getContext('2d')
   measure.font = '20px sans-serif'
   const lines = wrapText(measure, String(text || ''), maxTextW)
@@ -692,7 +701,6 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
   const c = canvas.getContext('2d')
   fillBg(c, w, h)
 
-  // card
   roundRect(c, 16, 16, w - 32, h - 32, 18)
   c.fillStyle = C.panel
   c.fill()
@@ -700,7 +708,6 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
   c.lineWidth = 2
   c.stroke()
 
-  // header strip
   roundRect(c, 16, 16, w - 32, 58, 18)
   c.fillStyle = 'rgba(196,30,58,0.2)'
   c.fill()
@@ -711,7 +718,6 @@ async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
   c.textAlign = 'center'
   c.fillText(`${emoji}  ${String(title).toUpperCase()}`, w / 2, 48)
 
-  // texto completo, sem cortar
   c.fillStyle = C.text
   c.font = '20px sans-serif'
   c.textAlign = 'center'
