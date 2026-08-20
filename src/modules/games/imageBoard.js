@@ -675,10 +675,11 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
 }
 
 
-async function drawQuote({ title = 'NYX', emoji = '✨', text = '' }) {
+async function drawQuote({ title = 'NYX', emoji = '✨', text = '', exact = false } = {}) {
   // 1) APIs externas (Pollinations / placehold)
+  // exact=true → prioriza texto legível (placehold); false → IA visual
   try {
-    const apiFile = await fetchCardImage({ title, emoji, text, exact: false })
+    const apiFile = await fetchCardImage({ title, emoji, text, exact: !!exact })
     if (apiFile) return apiFile
   } catch (e) {
     console.error('[drawQuote] api:', e.message)

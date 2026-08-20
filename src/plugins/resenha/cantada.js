@@ -1,5 +1,10 @@
 'use strict'
 
+/**
+ * .cantada — manda uma cantada com card visual
+ * Usa placehold/canvas (texto fiel). Sem imagem IA aleatória.
+ */
+
 const fs = require('fs')
 const { drawQuote } = require('../../modules/games/imageBoard')
 const { safeUnlink } = require('../../utils/helpers')
@@ -32,11 +37,11 @@ module.exports = {
   async execute({ client, from, info, reply, reagir }) {
     await reagir('💘')
     const text = ITEMS[Math.floor(Math.random() * ITEMS.length)]
-
     const caption = `💘 *Cantada*\n\n${text}`
 
     try {
-      const img = await drawQuote({ title: 'Cantada', emoji: '💘', text })
+      // exact: true → placehold/canvas (texto legível), sem IA aleatória
+      const img = await drawQuote({ title: 'Cantada', emoji: '💘', text, exact: true })
       await client.sendMessage(
         from,
         { image: fs.readFileSync(img), caption },
