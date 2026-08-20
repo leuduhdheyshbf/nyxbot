@@ -579,11 +579,9 @@ async function drawRank({ title = 'RANKING', emoji = '🏆', items = [] }) {
   const medals = ['🥇', '🥈', '🥉']
 
   list.forEach((it, i) => {
-    let name = String(it.name || '').trim()
-    // evita LID feio na imagem
-    if (!name || /^@?\d{10,}$/.test(name) || name.includes('…') || name.length > 20) {
-      name = i === 0 ? '1º lugar' : i === 1 ? '2º lugar' : i === 2 ? '3º lugar' : `${i + 1}º lugar`
-    }
+    let name = String(it.name || it.id || '?').trim()
+    if (!name) name = String(i + 1) + 'o'
+    if (name.length > 20) name = name.slice(0, 19) + '…'
     const rawVal = it.value != null ? String(it.value) : '0'
     const percent = Math.max(0, Math.min(100, parseInt(String(rawVal).replace(/\D/g, ''), 10) || 0))
 
