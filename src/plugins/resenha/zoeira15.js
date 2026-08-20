@@ -1,20 +1,20 @@
+'use strict'
+
+const ITEMS = [
+  "Seu Wi-Fi social está instável.",
+  "Diagnóstico: precisa de férias.",
+  "Você é o DLC pago do grupo."
+]
+
 module.exports = {
   name: 'zoeira15',
-  description: 'Zoeira aleatória #15',
+  description: "Zoeira 15",
   category: 'resenha',
-  aliases: [],
+  aliases: ["zoeira15"],
+  cooldown: 3,
   async execute({ reply, reagir }) {
-    await reagir('🦇')
-    const lines = [
-      'O grupo ficou em silêncio constrangedor.',
-      'Alguém derrubou o clima sem querer.',
-      'Plot twist: ninguém esperava isso.',
-      'Modo caos ativado.',
-      'Isso foi estranhamente genial.',
-      'Arquivado em memórias dúbias.',
-      'O universo piscou pra você.',
-      'Missão cumprida. Ou não.'
-    ]
-    await reply('🦇 #' + 15 + ' ' + lines[Math.floor(Math.random() * lines.length)])
+    await reagir('🤡')
+    const pick = ITEMS[Math.floor(Math.random() * ITEMS.length)]
+    await reply(`🤡 *Zoeira*\n\n${pick}`)
   }
 }

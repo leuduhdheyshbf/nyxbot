@@ -22,6 +22,10 @@ module.exports = {
     const ordem = [
       'resenha',
       'jogos',
+      'trabalho',
+      'estudo',
+      'financas',
+      'saude',
       'utilidades',
       'cmds-aleatorios',
       'admin',

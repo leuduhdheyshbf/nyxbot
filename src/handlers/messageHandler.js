@@ -3,7 +3,7 @@
 const db = require('../core/database')
 const { groups: groupCache } = require('../core/cache')
 const { logCommand, RedLog } = require('../core/logger')
-const { toJid, cleanNumber, getGroupAdmins } = require('../utils/helpers')
+const { toJid, cleanNumber, getGroupAdmins, sameUser, isParticipantAdmin, isParticipantSuperAdmin, participantIds } = require('../utils/helpers')
 const levels = require('../modules/levels')
 const economy = require('../modules/economy')
 
@@ -34,17 +34,22 @@ function createCtx(sock, info, config, cmdManager) {
   }
   sender = toJid(sender) || sender
 
-  // 🔥 CORREÇÃO DEFINITIVA - FORÇA O BOT COMO DONO
+  // Dono: número no config OU é o próprio bot
   const senderNum = cleanNumber(sender)
-  const botNum = cleanNumber(sock.user?.id)
+  const botId = sock.user?.id || ''
+  const botNum = cleanNumber(botId)
 
-  // Converte o config para lista de números limpos (só o número, sem DDI)
-  const donoNumeros = Array.isArray(config.NumeroDoDono)
-  ? config.NumeroDoDono.map(n => cleanNumber(n))
-  : [cleanNumber(config.NumeroDoDono)]
+  const donoList = Array.isArray(config.NumeroDoDono)
+    ? config.NumeroDoDono
+    : [config.NumeroDoDono]
 
-  // VERIFICAÇÃO INFALÍVEL: Se o sender for o bot, é dono. Se o sender estiver na lista, é dono.
-  let isDono = (senderNum && donoNumeros.includes(senderNum)) || (senderNum && senderNum === botNum)
+  const donoNumeros = donoList.map((n) => cleanNumber(n)).filter(Boolean)
+
+  let isDono =
+    (senderNum && donoNumeros.includes(senderNum)) ||
+    (senderNum && botNum && senderNum === botNum) ||
+    donoList.some((d) => sameUser(d, sender)) ||
+    sameUser(botId, sender)
 
   const reply = async (text) => {
     try {
@@ -83,6 +88,7 @@ function createCtx(sock, info, config, cmdManager) {
     isDono,
     isAdmin: false,
     isAdm: false,       // alias
+    isSuperAdmin: false,
     isBotAdmin: false,
     isBotAdm: false,    // alias
     groupMetadata: null,
@@ -116,14 +122,15 @@ async function enrichGroup(ctx, sock) {
       }
       ctx.groupMetadata = meta
       ctx.groupName = meta.subject || ''
-      ctx.groupAdmins = getGroupAdmins(meta.participants || [])
-      const botNum = cleanNumber(sock.user?.id)
-      const senderNum = cleanNumber(ctx.sender)
-      ctx.isBotAdmin = ctx.groupAdmins.some((a) => cleanNumber(a) === botNum)
-      ctx.isAdmin = ctx.isDono || ctx.groupAdmins.some((a) => cleanNumber(a) === senderNum)
+      const parts = meta.participants || []
+      ctx.groupAdmins = getGroupAdmins(parts)
+      ctx.isBotAdmin = isParticipantAdmin(parts, sock.user?.id) ||
+        ctx.groupAdmins.some((a) => sameUser(a, sock.user?.id))
+      ctx.isSuperAdmin = isParticipantSuperAdmin(parts, ctx.sender)
+      ctx.isAdmin = !!(ctx.isDono || ctx.isSuperAdmin || isParticipantAdmin(parts, ctx.sender))
       ctx.isAdm = ctx.isAdmin
       ctx.isBotAdm = ctx.isBotAdmin
-      ctx.groupMembers = meta.participants || []
+      ctx.groupMembers = parts
     } catch (e) {
       if (!String(e.message || e).includes('rate-overlimit')) {
         RedLog(`groupMetadata: ${e.message}`)
