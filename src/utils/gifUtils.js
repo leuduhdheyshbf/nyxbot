@@ -2,10 +2,17 @@
 
 /**
  * GIFs para resenha — APIs gratuitas sem chave
+ * Converte GIF → MP4 (ffmpeg) para gifPlayback funcionar no WhatsApp Web/Desktop
  * Render: waifu.pics costuma dar ENOTFOUND → prioriza nekos.life e otakugifs
  */
 
 const axios = require('axios')
+const fs = require('fs')
+const path = require('path')
+const os = require('os')
+const { execFile } = require('child_process')
+const { promisify } = require('util')
+const execFileAsync = promisify(execFile)
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -110,6 +117,10 @@ function extractUrl(data) {
   return null
 }
 
+/**
+ * Busca URL de GIF pela ação (kick, hug, kiss, slap, cuddle, etc.)
+ * Alias público: getGif
+ */
 async function getGifUrl(action) {
   const key = String(action || '').toLowerCase().trim()
   const list = ENDPOINTS[key] || ENDPOINTS.hug || []
@@ -129,58 +140,138 @@ async function getGifUrl(action) {
   return null
 }
 
+/** Alias pedido pelo padrão dos plugins */
+const getGif = getGifUrl
+
 async function getGifUrlWithFallback(actions) {
   const list = Array.isArray(actions) ? actions : [actions]
   for (const action of list) {
     const url = await getGifUrl(action)
     if (url) return url
   }
-  // última tentativa: hug genérico
   return getGifUrl('hug')
 }
 
+/**
+ * Baixa GIF e converte para MP4 (H.264 + yuv420p) para gifPlayback funcionar
+ * no WhatsApp Web / Desktop. Retorna Buffer do MP4 ou null.
+ */
+async function gifToMp4Buffer(gifUrl) {
+  const tmpDir = os.tmpdir()
+  const id = `nyx-gif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const gifPath = path.join(tmpDir, `${id}.gif`)
+  const mp4Path = path.join(tmpDir, `${id}.mp4`)
+
+  try {
+    const res = await axios.get(gifUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers: { 'User-Agent': UA },
+      maxContentLength: 15 * 1024 * 1024 // 15 MB
+    })
+    fs.writeFileSync(gifPath, Buffer.from(res.data))
+
+    // Converte GIF → MP4 otimizado para WhatsApp (loop infinito via gifPlayback)
+    await execFileAsync(
+      'ffmpeg',
+      [
+        '-y',
+        '-i', gifPath,
+        '-movflags', 'faststart',
+        '-pix_fmt', 'yuv420p',
+        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '28',
+        '-an',
+        mp4Path
+      ],
+      { timeout: 25000 }
+    )
+
+    const buffer = fs.readFileSync(mp4Path)
+    return buffer
+  } catch (err) {
+    console.error('[gifUtils] gifToMp4Buffer:', err.message)
+    return null
+  } finally {
+    try { fs.unlinkSync(gifPath) } catch {}
+    try { fs.unlinkSync(mp4Path) } catch {}
+  }
+}
+
+/**
+ * Envia reação com GIF como VÍDEO (gifPlayback + mimetype video/mp4)
+ * Funciona no celular E no WhatsApp Web/Desktop.
+ */
 async function sendGifReaction({ client, from, info, sender, target, caption, actions }) {
   try {
     const gifUrl = await getGifUrlWithFallback(actions)
 
     if (gifUrl) {
+      // 1) Tenta converter GIF → MP4 e enviar como vídeo animado
+      const mp4Buffer = await gifToMp4Buffer(gifUrl)
+      if (mp4Buffer && mp4Buffer.length > 1000) {
+        try {
+          await client.sendMessage(
+            from,
+            {
+              video: mp4Buffer,
+              gifPlayback: true,
+              mimetype: 'video/mp4',
+              caption,
+              mentions: [sender, target].filter(Boolean)
+            },
+            { quoted: info }
+          )
+          return
+        } catch (e1) {
+          console.error('[gifUtils] video (buffer) falhou:', e1.message)
+        }
+      }
+
+      // 2) Fallback: tenta URL direta como vídeo
       try {
         await client.sendMessage(
           from,
           {
             video: { url: gifUrl },
             gifPlayback: true,
+            mimetype: 'video/mp4',
             caption,
-            mentions: [sender, target]
+            mentions: [sender, target].filter(Boolean)
           },
           { quoted: info }
         )
         return
-      } catch (e1) {
-        console.error('[gifUtils] video falhou:', e1.message)
-        try {
-          await client.sendMessage(
-            from,
-            {
-              image: { url: gifUrl },
-              caption,
-              mentions: [sender, target]
-            },
-            { quoted: info }
-          )
-          return
-        } catch (e2) {
-          console.error('[gifUtils] image falhou:', e2.message)
-        }
+      } catch (e2) {
+        console.error('[gifUtils] video (url) falhou:', e2.message)
+      }
+
+      // 3) Último recurso: envia como imagem (não anima no desktop, mas aparece)
+      try {
+        await client.sendMessage(
+          from,
+          {
+            image: { url: gifUrl },
+            caption,
+            mentions: [sender, target].filter(Boolean)
+          },
+          { quoted: info }
+        )
+        return
+      } catch (e3) {
+        console.error('[gifUtils] image falhou:', e3.message)
       }
     }
   } catch (e) {
     console.error('[gifUtils] sendGifReaction:', e.message)
   }
 
+  // Fallback total: só texto
   await client.sendMessage(
     from,
-    { text: caption, mentions: [sender, target] },
+    { text: caption, mentions: [sender, target].filter(Boolean) },
     { quoted: info }
   )
 }
@@ -200,6 +291,7 @@ function resolveTarget(info, args = []) {
 }
 
 module.exports = {
+  getGif,           // alias pedido
   getGifUrl,
   getGifUrlWithFallback,
   sendGifReaction,
