@@ -1,15 +1,13 @@
 'use strict'
 
-// Guarda os agendamentos na memória (se o bot reiniciar, perde o agendamento)
-// Se quiser salvar no Supabase, podemos mudar depois, mas pra começar é simples assim.
-const agendamentos = new Map()
+const db = require('../../core/database')
 
 module.exports = {
     name: 'agendafechar',
     originalName: 'agendafechar',
-    description: 'Agenda o fechamento do grupo para um horário específico',
+    description: 'Agenda o fechamento em um horário (Salvo no Supabase)',
     category: 'admin',
-    aliases: ['agendarfechar', 'lockat'],
+    aliases: ['fecharhora', 'locktime'],
 
     async execute({ client, from, args, reply, isAdm, isDono, isGroup, prefix, reagir }) {
         if (!isGroup) {
@@ -19,109 +17,104 @@ module.exports = {
             return reply('❌ Apenas administradores podem usar este comando!')
         }
 
-        const sub = (args[0] || '').toLowerCase()
-
-        // =========================================================
-        // CANCELAR AGENDAMENTO
-        // =========================================================
-        if (sub === 'cancelar' || sub === 'cancel') {
-            if (!agendamentos.has(from)) {
-                return reply('⏳ Não há nenhum agendamento de fechamento ativo para este grupo.')
-            }
-
-            // Cancela o setTimeout que estava agendado
-            const timer = agendamentos.get(from)
-            clearTimeout(timer)
-            agendamentos.delete(from)
-
-            await reagir('❌')
-            return reply('⏳ *Agendamento de fechamento cancelado!*\nO grupo não será fechado automaticamente.')
-        }
-
-        // =========================================================
-        // FECHAR AGORA (Manual)
-        // =========================================================
-        if (sub === 'agora') {
-            try {
-                await client.groupSettingUpdate(from, 'announcement')
-                await client.groupSettingUpdate(from, 'restrict')
-                await reagir('🔒')
-                return reply('🔒 *Grupo fechado!* (Só admins podem enviar mensagens e alterar configurações).')
-            } catch (err) {
-                return reply(`❌ Erro ao fechar: ${err.message}`)
-            }
-        }
-
-        // =========================================================
-        // AGENDAR FECHAMENTO (Ex: .agendafechar 22:00)
-        // =========================================================
-        if (args.length >= 1 && /^\d{1,2}:\d{2}$/.test(args[0])) {
-            const horario = args[0] // Ex: "22:00"
-            const [horaStr, minutoStr] = horario.split(':')
-            let hora = parseInt(horaStr)
-            let minuto = parseInt(minutoStr)
-
-            // Validação básica
-            if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) {
-                return reply('❌ Horário inválido! Use o formato HH:MM (ex: 22:00).')
-            }
-
-            // Calcula o tempo até o horário
-            const agora = new Date()
-            const alvo = new Date()
-            alvo.setHours(hora, minuto, 0, 0) // Zera os segundos e milissegundos
-
-            // Se o horário já passou hoje, agenda para AMANHÃ
-            if (alvo.getTime() <= agora.getTime()) {
-                alvo.setDate(alvo.getDate() + 1)
-            }
-
-            const msAteFechar = alvo.getTime() - agora.getTime()
-            const horasAte = Math.floor(msAteFechar / (1000 * 60 * 60))
-            const minutosAte = Math.floor((msAteFechar % (1000 * 60 * 60)) / (1000 * 60))
-
-            // Se já houver um agendamento, cancela o antigo
-            if (agendamentos.has(from)) {
-                clearTimeout(agendamentos.get(from))
-                agendamentos.delete(from)
-            }
-
-            // Agenda o fechamento
-            const timer = setTimeout(async () => {
-                try {
-                    await client.groupSettingUpdate(from, 'announcement')
-                    await client.groupSettingUpdate(from, 'restrict')
-                    await client.sendMessage(from, { text: '🔒 *HORA DO FECHAMENTO!*\nO grupo foi automaticamente fechado conforme agendado.' })
-                } catch (e) {
-                    console.error(`Erro ao fechar grupo agendado (${from}):`, e.message)
-                } finally {
-                    agendamentos.delete(from) // Remove da memória após executar
-                }
-            }, msAteFechar)
-
-            agendamentos.set(from, timer)
-
-            await reagir('⏳')
+        // Ajuda (sem argumentos)
+        if (args.length < 1) {
             return reply(
-                `⏳ *FECHAMENTO AGENDADO!*\n\n` +
-                `📅 Data/Hora: *${alvo.toLocaleDateString('pt-BR')} às ${horario}*\n` +
-                `⏰ Faltam *${horasAte}h ${minutosAte}m* para o fechamento.\n\n` +
-                `Use \`${prefix}agendafechar cancelar\` para cancelar.\n` +
-                `Use \`${prefix}agendafechar agora\` para fechar manualmente agora.`
+                `⏰ *AGENDAR FECHAMENTO*\n\n` +
+                `Use: \`${prefix}agendafechar <HH:MM> <minutos_aberto>\`\n\n` +
+                `Exemplos:\n` +
+                `▸ \`${prefix}agendafechar 23:21 15\` → Fecha às 23:21 e abre 15 min depois\n` +
+                `▸ \`${prefix}agendafechar 22:00 60\` → Fecha às 22:00 e abre 1 hora depois\n` +
+                `▸ \`${prefix}agendafechar cancelar\` → Cancela agendamento\n\n` +
+                `⚠️ O bot precisa ser admin do grupo!`
             )
         }
 
-        // =========================================================
-        // Ajuda / Menu
-        // =========================================================
-        return reply(
-            `⏰ *AGENDAR FECHAMENTO*\n\n` +
-            `Agende um horário para o bot fechar o grupo automaticamente.\n\n` +
-            `📌 *Comandos:*\n` +
-            `▸ \`${prefix}agendafechar 22:00\` — Agenda fechar às 22h\n` +
-            `▸ \`${prefix}agendafechar agora\` — Fecha o grupo agora mesmo\n` +
-            `▸ \`${prefix}agendafechar cancelar\` — Cancela o agendamento atual\n\n` +
-            `⚠️ O bot precisa ser *admin* do grupo para fechar.`
-        )
+        const sub = args[0].toLowerCase()
+
+        // CANCELAR
+        if (sub === 'cancelar' || sub === 'cancel') {
+            try {
+                const { data, error } = await db.supabase
+                .from('agendamentos_fechar')
+                .delete()
+                .eq('group_id', from)
+                .select()
+
+                if (error) {
+                    console.error('[Cancelar] Erro no Supabase:', error.message)
+                    return reply('❌ Erro ao cancelar o agendamento.')
+                }
+
+                if (!data || data.length === 0) {
+                    return reply('⏳ Não há nenhum agendamento ativo para este grupo.')
+                }
+
+                await reagir('❌')
+                return reply('❌ *AGENDAMENTO CANCELADO!*\n\nO grupo não será mais fechado automaticamente.')
+            } catch (err) {
+                return reply('❌ Erro inesperado ao cancelar.')
+            }
+        }
+
+        // AGENDAR
+        const horario = args[0]
+        const minutosAbrir = parseInt(args[1]) || 0
+
+        if (!/^\d{1,2}:\d{2}$/.test(horario)) {
+            return reply('❌ Horário inválido! Use o formato HH:MM (ex: 23:21).')
+        }
+
+        const [h, m] = horario.split(':').map(Number)
+        if (h < 0 || h > 23 || m < 0 || m > 59) {
+            return reply('❌ Horário inválido! Use horas entre 00 e 23, minutos entre 00 e 59.')
+        }
+
+        // Verifica se o horário já passou hoje
+        const agora = new Date()
+        const alvo = new Date()
+        alvo.setHours(h, m, 0, 0)
+        if (alvo.getTime() <= agora.getTime()) {
+            alvo.setDate(alvo.getDate() + 1)
+        }
+
+        // Salva no Supabase
+        try {
+            const { error } = await db.supabase
+            .from('agendamentos_fechar')
+            .upsert({
+                group_id: from,
+                horario_fechar: horario,
+                minutos_abrir: minutosAbrir
+            }, { onConflict: 'group_id' })
+
+            if (error) {
+                console.error('[Agendamento] Erro ao salvar no Supabase:', error.message)
+                return reply('❌ Erro ao salvar o agendamento no banco de dados.')
+            }
+
+            const msAteFechar = alvo.getTime() - Date.now()
+            const horasAte = Math.floor(msAteFechar / (1000 * 60 * 60))
+            const minutosAte = Math.floor((msAteFechar % (1000 * 60 * 60)) / (1000 * 60))
+
+            await reagir('⏳')
+
+            const aberturaMsg = minutosAbrir > 0
+            ? `🔓 Abertura automática: ${new Date(alvo.getTime() + minutosAbrir * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+            : '❌ Não foi definido tempo para abrir automaticamente.'
+
+            return reply(
+                `⏳ *FECHAMENTO AGENDADO!*\n\n` +
+                `📅 Horário de fechamento: *${horario}* (em ${horasAte}h ${minutosAte}m)\n` +
+                `⏰ Tempo de bloqueio: *${minutosAbrir} minuto(s)*\n` +
+                `${aberturaMsg}\n\n` +
+                `✅ *Salvo no Supabase!* Mesmo se o bot reiniciar, ele vai lembrar.\n` +
+                `Use \`${prefix}agendafechar cancelar\` para cancelar.`
+            )
+
+        } catch (err) {
+            console.error('[Agendamento] Erro inesperado:', err.message)
+            return reply('❌ Erro inesperado ao salvar o agendamento.')
+        }
     }
 }

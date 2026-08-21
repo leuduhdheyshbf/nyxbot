@@ -2,11 +2,11 @@
 
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  Browsers
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    Browsers
 } = require('@whiskeysockets/baileys')
 const { Boom } = require('@hapi/boom')
 const pino = require('pino')
@@ -25,6 +25,7 @@ ensureDir(AUTH_DIR)
 ensureDir(path.join(ROOT, 'temp'))
 
 let isReconnecting = false
+let sockGlobal = null // <-- Variável global para salvar o socket
 
 async function startConnection({ onMessage, onGroupUpdate, config }) {
   if (isReconnecting) {
@@ -47,11 +48,13 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
       keys: makeCacheableSignalKeyStore(state.keys, logger)
     },
     browser: Browsers.ubuntu('Chrome'),
-    msgRetryCounterCache,
-    syncFullHistory: false,
-    generateHighQualityLinkPreview: true,
-    getMessage: async () => undefined
+                            msgRetryCounterCache,
+                            syncFullHistory: false,
+                            generateHighQualityLinkPreview: true,
+                            getMessage: async () => undefined
   })
+
+  sockGlobal = sock // <-- Salva o socket na variável global
 
   if (usePairingCode && !sock.authState.creds.registered) {
     const phone = config.NumeroDoDono?.replace(/\D/g, '')
@@ -106,4 +109,9 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
   return sock
 }
 
-module.exports = { startConnection }
+// Função para retornar o socket global
+function getSock() {
+  return sockGlobal
+}
+
+module.exports = { startConnection, getSock }
