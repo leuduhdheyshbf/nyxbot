@@ -1,7 +1,7 @@
 'use strict'
 
-// CORREÇÃO AQUI: Caminho corrigido para 3 níveis acima
-const db = require('../../../core/database')
+// CORREÇÃO DO CAMINHO: Agora com 2 níveis (../../)
+const db = require('../../core/database')
 
 module.exports = {
     name: 'agendafechar',
