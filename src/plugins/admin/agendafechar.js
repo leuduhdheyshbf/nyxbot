@@ -1,6 +1,6 @@
 'use strict'
 
-// CORREÇÃO DO CAMINHO: Agora com 2 níveis (../../)
+// CORREÇÃO DO CAMINHO
 const db = require('../../core/database')
 
 module.exports = {
@@ -11,6 +11,7 @@ module.exports = {
     aliases: ['fecharhora', 'locktime'],
 
     async execute({ client, from, args, reply, isAdm, isDono, isGroup, prefix, reagir }) {
+        // 1. Verificação básica
         if (!isGroup) {
             return reply('❌ Este comando só funciona em grupos!')
         }
@@ -18,8 +19,8 @@ module.exports = {
             return reply('❌ Apenas administradores podem usar este comando!')
         }
 
-        // Ajuda (sem argumentos)
-        if (args.length < 1) {
+        // 2. Se não tiver argumento (ou for ajuda)
+        if (args.length === 0) {
             return reply(
                 `⏰ *AGENDAR FECHAMENTO*\n\n` +
                 `Use: \`${prefix}agendafechar <HH:MM>\`\n\n` +
@@ -32,7 +33,9 @@ module.exports = {
 
         const sub = args[0].toLowerCase()
 
+        // =========================================================
         // CANCELAR
+        // =========================================================
         if (sub === 'cancelar' || sub === 'cancel') {
             try {
                 const { data, error } = await db.supabase
@@ -42,8 +45,7 @@ module.exports = {
                 .select()
 
                 if (error) {
-                    console.error('[Cancelar] Erro no Supabase:', error.message)
-                    return reply('❌ Erro ao cancelar o agendamento.')
+                    return reply(`❌ Erro no Supabase: ${error.message}`)
                 }
 
                 if (!data || data.length === 0) {
@@ -53,13 +55,16 @@ module.exports = {
                 await reagir('❌')
                 return reply('❌ *AGENDAMENTO CANCELADO!*\n\nO grupo não será mais fechado automaticamente.')
             } catch (err) {
-                return reply('❌ Erro inesperado ao cancelar.')
+                return reply(`❌ Erro inesperado: ${err.message}`)
             }
         }
 
+        // =========================================================
         // AGENDAR
+        // =========================================================
         const horario = args[0]
 
+        // Valida o formato do horário
         if (!/^\d{1,2}:\d{2}$/.test(horario)) {
             return reply('❌ Horário inválido! Use o formato HH:MM (ex: 23:21).')
         }
@@ -88,8 +93,7 @@ module.exports = {
             }, { onConflict: 'group_id' })
 
             if (error) {
-                console.error('[Agendamento] Erro ao salvar no Supabase:', error.message)
-                return reply('❌ Erro ao salvar o agendamento no banco de dados.')
+                return reply(`❌ Erro ao salvar no Supabase: ${error.message}`)
             }
 
             const msAteFechar = alvo.getTime() - Date.now()
@@ -107,8 +111,7 @@ module.exports = {
             )
 
         } catch (err) {
-            console.error('[Agendamento] Erro inesperado:', err.message)
-            return reply('❌ Erro inesperado ao salvar o agendamento.')
+            return reply(`❌ Erro inesperado ao agendar: ${err.message}`)
         }
     }
 }
