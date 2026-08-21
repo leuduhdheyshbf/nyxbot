@@ -5,7 +5,7 @@ const db = require('../../core/database')
 module.exports = {
     name: 'agendafechar',
     originalName: 'agendafechar',
-    description: 'Agenda o fechamento em um horário (Salvo no Supabase)',
+    description: 'Agenda o fechamento do grupo (Não abre sozinho)',
     category: 'admin',
     aliases: ['fecharhora', 'locktime'],
 
@@ -21,10 +21,9 @@ module.exports = {
         if (args.length < 1) {
             return reply(
                 `⏰ *AGENDAR FECHAMENTO*\n\n` +
-                `Use: \`${prefix}agendafechar <HH:MM> <minutos_aberto>\`\n\n` +
+                `Use: \`${prefix}agendafechar <HH:MM>\`\n\n` +
                 `Exemplos:\n` +
-                `▸ \`${prefix}agendafechar 23:21 15\` → Fecha às 23:21 e abre 15 min depois\n` +
-                `▸ \`${prefix}agendafechar 22:00 60\` → Fecha às 22:00 e abre 1 hora depois\n` +
+                `▸ \`${prefix}agendafechar 23:59\` → Fecha às 23:59\n` +
                 `▸ \`${prefix}agendafechar cancelar\` → Cancela agendamento\n\n` +
                 `⚠️ O bot precisa ser admin do grupo!`
             )
@@ -59,7 +58,6 @@ module.exports = {
 
         // AGENDAR
         const horario = args[0]
-        const minutosAbrir = parseInt(args[1]) || 0
 
         if (!/^\d{1,2}:\d{2}$/.test(horario)) {
             return reply('❌ Horário inválido! Use o formato HH:MM (ex: 23:21).')
@@ -85,7 +83,7 @@ module.exports = {
             .upsert({
                 group_id: from,
                 horario_fechar: horario,
-                minutos_abrir: minutosAbrir
+                minutos_abrir: 0 // Força 0 para NUNCA abrir sozinho
             }, { onConflict: 'group_id' })
 
             if (error) {
@@ -99,17 +97,12 @@ module.exports = {
 
             await reagir('⏳')
 
-            const aberturaMsg = minutosAbrir > 0
-            ? `🔓 Abertura automática: ${new Date(alvo.getTime() + minutosAbrir * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-            : '❌ Não foi definido tempo para abrir automaticamente.'
-
             return reply(
                 `⏳ *FECHAMENTO AGENDADO!*\n\n` +
                 `📅 Horário de fechamento: *${horario}* (em ${horasAte}h ${minutosAte}m)\n` +
-                `⏰ Tempo de bloqueio: *${minutosAbrir} minuto(s)*\n` +
-                `${aberturaMsg}\n\n` +
+                `🔒 *O grupo NÃO abrirá sozinho.*\n\n` +
                 `✅ *Salvo no Supabase!* Mesmo se o bot reiniciar, ele vai lembrar.\n` +
-                `Use \`${prefix}agendafechar cancelar\` para cancelar.`
+                `Para abrir, use \`${prefix}abrir\` (ou comando de abrir do grupo).`
             )
 
         } catch (err) {

@@ -79,7 +79,7 @@ app.listen(PORT, () => {
 // ============================================
 
 // ============================================
-// VERIFICADOR DE AGENDAMENTOS (Supabase)
+// VERIFICADOR DE AGENDAMENTOS (Supabase) - CORRIGIDO PARA NÃO ABRIR SOZINHO
 // ============================================
 const verificarAgendamentos = async () => {
   try {
@@ -118,22 +118,12 @@ const verificarAgendamentos = async () => {
           await sock.sendMessage(groupId, {
             text: `🔒 *GRUPO FECHADO!*\n\n` +
             `🕒 Horário agendado: ${horarioAtual}\n` +
-            `⏳ Será reaberto em *${minutosAbrir} minuto(s)*`
+            `⏳ O grupo está fechado. Use .abrir para liberar.`
           })
 
+          // REMOVIDO: Se tiver minutos_abrir > 0, o bot NÃO abre sozinho
           if (minutosAbrir > 0) {
-            setTimeout(async () => {
-              try {
-                console.log(`[Agendamento] Abrindo grupo ${groupId} após ${minutosAbrir} min`)
-                await sock.groupSettingUpdate(groupId, 'not_announcement')
-                await sock.groupSettingUpdate(groupId, 'not_restrict')
-                await sock.sendMessage(groupId, {
-                  text: `🔓 *GRUPO REABERTO!*\n\nO tempo de bloqueio acabou.`
-                })
-              } catch (err) {
-                console.error('[Agendamento] Erro ao abrir:', err.message)
-              }
-            }, minutosAbrir * 60 * 1000)
+            console.log(`[Agendamento] Ignorando abertura automática para ${groupId}`);
           }
 
           await db.supabase.from('agendamentos_fechar').delete().eq('group_id', groupId)
