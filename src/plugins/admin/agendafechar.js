@@ -1,6 +1,6 @@
 'use strict'
 
-// CORREÇÃO DO CAMINHO
+// CORREÇÃO DO CAMINHO (Já testado e aprovado no Render)
 const db = require('../../core/database')
 
 module.exports = {
@@ -11,7 +11,6 @@ module.exports = {
     aliases: ['fecharhora', 'locktime'],
 
     async execute({ client, from, args, reply, isAdm, isDono, isGroup, prefix, reagir }) {
-        // 1. Verificação básica
         if (!isGroup) {
             return reply('❌ Este comando só funciona em grupos!')
         }
@@ -19,7 +18,9 @@ module.exports = {
             return reply('❌ Apenas administradores podem usar este comando!')
         }
 
-        // 2. Se não tiver argumento (ou for ajuda)
+        // =========================================================
+        // AJUDA (SEM ARGUMENTOS)
+        // =========================================================
         if (args.length === 0) {
             return reply(
                 `⏰ *AGENDAR FECHAMENTO*\n\n` +
@@ -64,7 +65,6 @@ module.exports = {
         // =========================================================
         const horario = args[0]
 
-        // Valida o formato do horário
         if (!/^\d{1,2}:\d{2}$/.test(horario)) {
             return reply('❌ Horário inválido! Use o formato HH:MM (ex: 23:21).')
         }
@@ -82,14 +82,14 @@ module.exports = {
             alvo.setDate(alvo.getDate() + 1)
         }
 
-        // Salva no Supabase
         try {
+            // Tenta salvar no Supabase
             const { error } = await db.supabase
             .from('agendamentos_fechar')
             .upsert({
                 group_id: from,
                 horario_fechar: horario,
-                minutos_abrir: 0 // Força 0 para NUNCA abrir sozinho
+                minutos_abrir: 0
             }, { onConflict: 'group_id' })
 
             if (error) {
