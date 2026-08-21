@@ -1,3 +1,8 @@
+// ============================================
+// CORREÇÃO DE FUSO HORÁRIO PARA O RENDER
+// ============================================
+process.env.TZ = 'America/Sao_Paulo'
+
 'use strict'
 
 /*
@@ -78,7 +83,7 @@ async function main() {
   await startConnection({
     config,
     onMessage: (upsert, sock) => handleMessage(upsert, sock, { config, cmdManager }),
-    onGroupUpdate: (ev, sock) => handleGroupUpdate(ev, sock)
+                        onGroupUpdate: (ev, sock) => handleGroupUpdate(ev, sock)
   })
   GreenLog('Core pronto. Aguardando conexão WhatsApp...')
 }
