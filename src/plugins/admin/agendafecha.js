@@ -1,6 +1,7 @@
 'use strict'
 
-const db = require('../../core/database')
+// CORREÇÃO AQUI: Caminho corrigido para 3 níveis acima
+const db = require('../../../core/database')
 
 module.exports = {
     name: 'agendafechar',
