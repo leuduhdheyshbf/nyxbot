@@ -1,36 +1,30 @@
 'use strict'
 
 /**
- * Sistema de casamento (persistente em users.json)
+ * Sistema de casamento (persistente em Supabase)
  *
- * Campos no usuário:
- *   spouse   → jid do cônjuge (ou null)
- *   marriedAt → timestamp
- *
- * Propostas pendentes ficam em memória (Map) e expiram em 5 min.
+ * Tabela: marriage_proposals
+ * Colunas: from_jid, to_jid, created_at
  */
 
 const db = require('../core/database')
 
-/** @type {Map<string, { from: string, to: string, at: number }>} */
-const pending = new Map()
-
-const PROPOSAL_TTL = 5 * 60 * 1000 // 5 minutos
-
-function cleanExpired() {
-  const now = Date.now()
-  for (const [key, p] of pending) {
-    if (now - p.at > PROPOSAL_TTL) pending.delete(key)
+// Função auxiliar para limpar pedidos expirados (mais de 5 minutos)
+async function cleanExpiredProposals() {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    await db.supabase
+    .from('marriage_proposals')
+    .delete()
+    .lt('created_at', fiveMinutesAgo)
+  } catch (err) {
+    console.error('[Marriage] Erro ao limpar pedidos expirados:', err.message)
   }
-}
-
-function proposalKey(toJid) {
-  return String(toJid)
 }
 
 function getSpouse(jid) {
   const u = db.getUser(jid)
-  return u.spouse || null
+  return u?.spouse || null
 }
 
 function isMarried(jid) {
@@ -39,19 +33,19 @@ function isMarried(jid) {
 
 function getMarriageInfo(jid) {
   const u = db.getUser(jid)
-  if (!u.spouse) return null
-  return {
-    spouse: u.spouse,
-    marriedAt: u.marriedAt || null
-  }
+  if (!u?.spouse) return null
+    return {
+      spouse: u.spouse,
+      marriedAt: u.marriedAt || null
+    }
 }
 
 /**
- * Cria proposta de casamento.
- * @returns {{ ok: boolean, reason?: string }}
+ * Cria proposta de casamento (Salva no Supabase)
  */
-function propose(fromJid, toJid) {
-  cleanExpired()
+async function propose(fromJid, toJid) {
+  // Limpa expirados antes de checar
+  await cleanExpiredProposals()
 
   if (!fromJid || !toJid) return { ok: false, reason: 'Alvo inválido.' }
   if (fromJid === toJid) return { ok: false, reason: 'Você não pode casar consigo mesmo 😅' }
@@ -59,51 +53,120 @@ function propose(fromJid, toJid) {
   if (isMarried(fromJid)) return { ok: false, reason: 'Você já está casado(a)! Use .divorciar primeiro.' }
   if (isMarried(toJid)) return { ok: false, reason: 'Essa pessoa já está casada!' }
 
-  // Já tem proposta pendente para essa pessoa?
-  const existing = pending.get(proposalKey(toJid))
-  if (existing && existing.from === fromJid) {
-    return { ok: false, reason: 'Você já pediu essa pessoa em casamento. Aguarde a resposta.' }
-  }
-  if (existing) {
-    return { ok: false, reason: 'Essa pessoa já tem um pedido de casamento pendente.' }
-  }
+  try {
+    // Verifica se já existe um pedido ativo para essa pessoa
+    const { data: existing, error: checkError } = await db.supabase
+    .from('marriage_proposals')
+    .select('from_jid')
+    .eq('to_jid', toJid)
+    .maybeSingle()
 
-  pending.set(proposalKey(toJid), { from: fromJid, to: toJid, at: Date.now() })
-  return { ok: true }
+    if (checkError) throw checkError
+
+      if (existing) {
+        if (existing.from_jid === fromJid) {
+          return { ok: false, reason: 'Você já pediu essa pessoa em casamento. Aguarde a resposta.' }
+        }
+        return { ok: false, reason: 'Essa pessoa já tem um pedido de casamento pendente de outra pessoa.' }
+      }
+
+      // Insere o novo pedido
+      const { error: insertError } = await db.supabase
+      .from('marriage_proposals')
+      .insert({ from_jid: fromJid, to_jid: toJid })
+
+      if (insertError) throw insertError
+
+        return { ok: true }
+
+  } catch (err) {
+    console.error('[Marriage] Erro ao propor casamento:', err.message)
+    return { ok: false, reason: 'Erro interno ao salvar pedido. Tente novamente.' }
+  }
 }
 
 /**
- * Aceita proposta (quem aceita é o "to").
+ * Aceita proposta (Busca no Supabase e apaga após casar)
  */
-function accept(toJid) {
-  cleanExpired()
-  const key = proposalKey(toJid)
-  const p = pending.get(key)
-  if (!p) return { ok: false, reason: 'Você não tem nenhum pedido de casamento pendente.' }
+async function accept(toJid) {
+  await cleanExpiredProposals()
 
-  if (isMarried(p.from) || isMarried(p.to)) {
-    pending.delete(key)
-    return { ok: false, reason: 'Um de vocês já se casou no meio do caminho 😅' }
+  try {
+    // Busca o pedido pendente
+    const { data: proposal, error: fetchError } = await db.supabase
+    .from('marriage_proposals')
+    .select('from_jid')
+    .eq('to_jid', toJid)
+    .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+      if (!proposal) {
+        if (isMarried(toJid)) {
+          return { ok: false, reason: 'Você já está casado(a)!' }
+        }
+        return { ok: false, reason: 'Você não tem nenhum pedido de casamento pendente.' }
+      }
+
+      const fromJid = proposal.from_jid
+
+      // Verifica se alguém casou enquanto isso
+      if (isMarried(fromJid) || isMarried(toJid)) {
+        // Remove o pedido caso alguém já esteja casado
+        await db.supabase.from('marriage_proposals').delete().eq('to_jid', toJid)
+        return { ok: false, reason: 'Um de vocês já se casou no meio do caminho 😅' }
+      }
+
+      const now = Date.now()
+
+      // Salva o casamento no banco de usuários (usando o saveUser do seu db)
+      try {
+        db.saveUser(fromJid, { spouse: toJid, marriedAt: now })
+        db.saveUser(toJid, { spouse: fromJid, marriedAt: now })
+      } catch (err) {
+        console.error('[Marriage] Erro ao salvar no banco de usuários:', err.message)
+        return { ok: false, reason: 'Erro interno ao salvar o casamento. Tente novamente.' }
+      }
+
+      // Remove o pedido do Supabase (já foi aceito)
+      await db.supabase.from('marriage_proposals').delete().eq('to_jid', toJid)
+
+      return { ok: true, partner: fromJid }
+
+  } catch (err) {
+    console.error('[Marriage] Erro ao aceitar casamento:', err.message)
+    return { ok: false, reason: 'Erro no banco de dados. Tente novamente.' }
   }
-
-  const now = Date.now()
-  db.saveUser(p.from, { spouse: p.to, marriedAt: now })
-  db.saveUser(p.to, { spouse: p.from, marriedAt: now })
-  pending.delete(key)
-
-  return { ok: true, partner: p.from }
 }
 
 /**
- * Recusa proposta.
+ * Recusa proposta (apaga do Supabase)
  */
-function reject(toJid) {
-  cleanExpired()
-  const key = proposalKey(toJid)
-  const p = pending.get(key)
-  if (!p) return { ok: false, reason: 'Você não tem nenhum pedido de casamento pendente.' }
-  pending.delete(key)
-  return { ok: true, from: p.from }
+async function reject(toJid) {
+  await cleanExpiredProposals()
+
+  try {
+    const { data: proposal, error: fetchError } = await db.supabase
+    .from('marriage_proposals')
+    .select('from_jid')
+    .eq('to_jid', toJid)
+    .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+      if (!proposal) {
+        return { ok: false, reason: 'Você não tem nenhum pedido de casamento pendente.' }
+      }
+
+      // Apaga o pedido
+      await db.supabase.from('marriage_proposals').delete().eq('to_jid', toJid)
+
+      return { ok: true, from: proposal.from_jid }
+
+  } catch (err) {
+    console.error('[Marriage] Erro ao recusar casamento:', err.message)
+    return { ok: false, reason: 'Erro ao recusar pedido.' }
+  }
 }
 
 /**
@@ -114,37 +177,53 @@ function divorce(jid) {
   if (!spouse) return { ok: false, reason: 'Você não está casado(a).' }
 
   db.saveUser(jid, { spouse: null, marriedAt: null })
-  // limpa o outro também se ainda apontar pra cá
   const other = db.getUser(spouse)
-  if (other.spouse === jid) {
+  if (other?.spouse === jid) {
     db.saveUser(spouse, { spouse: null, marriedAt: null })
   }
   return { ok: true, ex: spouse }
 }
 
-function hasPending(toJid) {
-  cleanExpired()
-  return pending.has(proposalKey(toJid))
+async function hasPending(toJid) {
+  await cleanExpiredProposals()
+  const { data, error } = await db.supabase
+  .from('marriage_proposals')
+  .select('id')
+  .eq('to_jid', toJid)
+  .limit(1)
+
+  if (error) {
+    console.error('[Marriage] Erro ao verificar pending:', error.message)
+    return false
+  }
+  return data && data.length > 0
 }
 
-function getPending(toJid) {
-  cleanExpired()
-  return pending.get(proposalKey(toJid)) || null
+async function getPending(toJid) {
+  await cleanExpiredProposals()
+  const { data, error } = await db.supabase
+  .from('marriage_proposals')
+  .select('from_jid, to_jid, created_at')
+  .eq('to_jid', toJid)
+  .maybeSingle()
+
+  if (error || !data) return null
+    return { from: data.from_jid, to: data.to_jid, at: new Date(data.created_at).getTime() }
 }
 
 function formatDate(ts) {
   if (!ts) return '?'
-  try {
-    return new Date(ts).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch {
-    return '?'
-  }
+    try {
+      return new Date(ts).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return '?'
+    }
 }
 
 module.exports = {

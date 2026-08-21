@@ -1,5 +1,6 @@
 'use strict'
 
+// CORREÇÃO: Agora ele puxa o helpers do local correto (mesma pasta)
 const { cleanNumber } = require('./helpers')
 
 function getMentionJid(m) {
@@ -22,9 +23,6 @@ function fromContactEntry(c) {
   return null
 }
 
-/**
- * Busca nome em vários mapas de contato do Baileys
- */
 function lookupContacts(jid, contacts) {
   if (!jid || !contacts) return null
   const keys = [
@@ -39,7 +37,6 @@ function lookupContacts(jid, contacts) {
     if (hit) return hit
   }
 
-  // varre valores (mais lento, mas pega LID mal indexado)
   try {
     const target = cleanNumber(jid)
     const user = String(jid).split('@')[0]
@@ -57,23 +54,19 @@ function lookupContacts(jid, contacts) {
 }
 
 function resolveName(m, jid, contacts) {
-  // 1) dados do participant
   if (m && typeof m === 'object') {
     const hit = fromContactEntry(m)
     if (hit) return hit
   }
 
-  // 2) contacts do sock/client
   const fromStore = lookupContacts(jid, contacts)
   if (fromStore) return fromStore
 
-  // 3) phoneNumber do participant → contacts
   if (m && m.phoneNumber) {
     const hit = lookupContacts(m.phoneNumber, contacts)
     if (hit) return hit
   }
 
-  // 4) fallback legível (não só dígitos crus)
   if (!jid) return 'Membro'
   const user = String(jid).split('@')[0]
   if (/^\d{10,}$/.test(user)) return user.slice(-4)
@@ -92,11 +85,7 @@ function collectContacts(client, sock) {
     if (sock?.contacts) maps.push(sock.contacts)
     if (client?.store?.contacts) maps.push(client.store.contacts)
     if (sock?.store?.contacts) maps.push(sock.store.contacts)
-    if (client?.authState?.creds?.me) {
-      /* noop */
-    }
   } catch {}
-  // merge shallow
   const out = {}
   for (const m of maps) {
     if (m && typeof m === 'object') Object.assign(out, m)
@@ -104,10 +93,6 @@ function collectContacts(client, sock) {
   return out
 }
 
-/**
- * Ranking aleatório
- * opts.nameMap: { [jid]: 'Nome' } — prioridade máxima (ex: resolvido async)
- */
 function pickRank(participants, { botNum, size = 5, minPct = 60, maxPct = 100, contacts, nameMap } = {}) {
   const pool = []
 
@@ -126,7 +111,6 @@ function pickRank(participants, { botNum, size = 5, minPct = 60, maxPct = 100, c
         (nameMap && (nameMap[jid] || nameMap[cleanNumber(jid)])) ||
         resolveName(raw, jid, contacts)
 
-      // se ainda parece só número, tenta phoneNumber
       if ((!name || /^\d+$/.test(name)) && raw?.phoneNumber) {
         name = resolveName(raw, raw.phoneNumber, contacts) || name
       }
@@ -142,16 +126,12 @@ function pickRank(participants, { botNum, size = 5, minPct = 60, maxPct = 100, c
   return items
 }
 
-/**
- * Tenta resolver nomes via sock (Baileys) de forma best-effort
- */
 async function resolveNamesAsync(sock, jids = []) {
   const map = {}
   if (!sock || !jids.length) return map
 
   for (const jid of jids) {
     try {
-      // onWhatsApp às vezes devolve exists + jid
       if (typeof sock.onWhatsApp === 'function') {
         const r = await sock.onWhatsApp(jid)
         const row = Array.isArray(r) ? r[0] : r
