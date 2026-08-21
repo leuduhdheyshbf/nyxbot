@@ -2,114 +2,160 @@
 
 const fs = require('fs')
 const path = require('path')
+const axios = require('axios')
+const { RedLog, CyanLog } = require('../core/logger')
 
-const ROOT = path.join(__dirname, '..', '..', '..')
-const WELCOME_PATH = path.join(ROOT, 'database', 'json', 'welcome.json')
-
-function ensureWelcomeFile() {
-  const dir = path.dirname(WELCOME_PATH)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  if (!fs.existsSync(WELCOME_PATH)) {
-    fs.writeFileSync(WELCOME_PATH, JSON.stringify({ groups: [] }, null, 2))
-  }
-}
-
-function loadWelcome() {
-  ensureWelcomeFile()
-  try {
-    const data = JSON.parse(fs.readFileSync(WELCOME_PATH, 'utf8'))
-    if (Array.isArray(data)) return { groups: data }
-    return { groups: Array.isArray(data.groups) ? data.groups : [] }
-  } catch {
-    return { groups: [] }
-  }
-}
-
-function saveWelcome(data) {
-  ensureWelcomeFile()
-  fs.writeFileSync(WELCOME_PATH, JSON.stringify(data, null, 2))
-}
+const WELCOME_PATH = path.join(__dirname, '..', '..', 'database', 'json', 'welcome.json')
+const DEFAULT_IMAGE_PATH = path.join(__dirname, '..', 'assets', 'welcome-default.jpeg')
 
 function isWelcomeEnabled(groupId) {
-  const data = loadWelcome()
-  return data.groups.includes(groupId)
+  try {
+    if (!fs.existsSync(WELCOME_PATH)) return false
+      const data = JSON.parse(fs.readFileSync(WELCOME_PATH, 'utf8'))
+      const groups = Array.isArray(data) ? data : data.groups || []
+      return groups.includes(groupId)
+  } catch {
+    return false
+  }
 }
 
-function setWelcome(groupId, enabled) {
-  const data = loadWelcome()
-  if (enabled) {
-    if (!data.groups.includes(groupId)) data.groups.push(groupId)
-  } else {
-    data.groups = data.groups.filter((g) => g !== groupId)
+const WELCOME_CAPTION = `🎰 *BEM-VINDO A LAS VEGAS* 🎰
+╰──────────────────────────╯
+💸 *A sorte está do seu lado.*
+🎲 *Vamos jogar?*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+📌 *Para começar, se apresente:*
+🃏 Foto ou vídeo
+👤 Nome
+🎂 Idade
+📍 Cidade
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+💰 *A mesa está aberta.*
+♠️ *Nyx Bot te dá as boas-vindas.*`
+
+/**
+ * Tenta obter a URL da foto de perfil do usuário.
+ * Retorna null se não tiver ou der erro.
+ */
+async function getProfilePictureUrl(sock, jid) {
+  try {
+    const url = await sock.profilePictureUrl(jid, 'image')
+    return url || null
+  } catch {
+    return null
   }
-  saveWelcome(data)
+}
+
+/**
+ * Baixa a imagem como buffer (melhor compatibilidade no Baileys).
+ */
+async function downloadImageBuffer(url) {
+  try {
+    const res = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers: { 'User-Agent': 'NyxBot/2.0' }
+    })
+    return Buffer.from(res.data)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Carrega a imagem padrão local (selfie dos gatos).
+ */
+function getDefaultImageBuffer() {
+  try {
+    if (fs.existsSync(DEFAULT_IMAGE_PATH)) {
+      return fs.readFileSync(DEFAULT_IMAGE_PATH)
+    }
+  } catch {}
+  return null
+}
+
+/**
+ * Envia a mensagem de boas-vindas para um participante que entrou.
+ */
+async function sendWelcome(sock, groupId, participantJid) {
+  try {
+    const imageUrl = await getProfilePictureUrl(sock, participantJid)
+    let buffer = null
+    let usedFallback = false
+
+    if (imageUrl) {
+      buffer = await downloadImageBuffer(imageUrl)
+    }
+
+    // Sem foto de perfil ou falha no download → imagem padrão (gatos)
+    if (!buffer) {
+      buffer = getDefaultImageBuffer()
+      usedFallback = true
+    }
+
+    const mentionTag = `@${participantJid.split('@')[0]}`
+    const caption = `${mentionTag}\n\n${WELCOME_CAPTION}`
+
+    if (buffer) {
+      await sock.sendMessage(groupId, {
+        image: buffer,
+        caption,
+        mentions: [participantJid]
+      })
+    } else {
+      // último recurso: só texto
+      await sock.sendMessage(groupId, {
+        text: caption,
+        mentions: [participantJid]
+      })
+    }
+
+    CyanLog(
+      `Boas-vindas enviada em ${groupId} para ${participantJid}` +
+      (usedFallback ? ' (imagem padrão)' : ' (foto de perfil)')
+    )
+  } catch (err) {
+    RedLog(`sendWelcome: ${err.message}`)
+  }
+}
+
+/**
+ * Handler do evento group-participants.update do Baileys.
+ */
+async function handleGroupUpdate(update, sock) {
+  try {
+    if (!update || !update.id) return
+
+      const groupId = update.id
+      const action = update.action
+      const participants = update.participants || []
+
+      // CORREÇÃO AQUI: Aceita 'add' (adicionado por admin) E 'invite' (entrou por link)
+      if (action !== 'add' && action !== 'invite') return
+        if (!participants.length) return
+
+          // Verifica se o sistema está ativo neste grupo
+          if (!isWelcomeEnabled(groupId)) return
+
+            for (const p of participants) {
+              const jid = typeof p === 'string' ? p : p?.id || p?.jid || p?.phoneNumber
+              if (!jid || jid.endsWith('@g.us')) continue
+
+                // Evita boas-vindas para o próprio bot
+                const botId = sock.user?.id || ''
+                if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
+                  continue
+                }
+
+                await sendWelcome(sock, groupId, jid)
+            }
+  } catch (err) {
+    RedLog(`handleGroupUpdate: ${err.message}`)
+  }
 }
 
 module.exports = {
-  name: 'bemvindo',
-  description: 'Sistema de boas-vindas com foto de perfil (Las Vegas)',
-  category: 'admin',
-  aliases: ['boasvindas', 'welcome'],
-
-  // Exportado para o handler de grupo
-  isWelcomeEnabled,
-  setWelcome,
-  loadWelcome,
-
-  async execute({ client, from, info, args, reply, isAdm, isDono, isGroup, prefix, reagir }) {
-    if (!isGroup) {
-      return reply('❌ Este comando só pode ser usado em grupos!')
-    }
-    if (!isAdm && !isDono) {
-      return reply('❌ Apenas administradores podem usar este comando!')
-    }
-
-    const sub = (args[0] || '').toLowerCase()
-
-    if (sub === 'on' || sub === '1' || sub === 'ativar') {
-      if (isWelcomeEnabled(from)) {
-        return reply('🎰 O sistema de boas-vindas já está *ATIVADO* neste grupo!')
-      }
-      setWelcome(from, true)
-      if (typeof reagir === 'function') await reagir('✅')
-      return reply(
-        `🎰 *BOAS-VINDAS ATIVADAS!*\n\n` +
-          `Quando um novo membro entrar, o bot enviará a mensagem de Las Vegas com a foto de perfil.\n\n` +
-          `Use \`${prefix}bemvindo off\` para desativar.`
-      )
-    }
-
-    if (sub === 'off' || sub === '0' || sub === 'desativar') {
-      if (!isWelcomeEnabled(from)) {
-        return reply('❄️ O sistema de boas-vindas já está *DESATIVADO* neste grupo!')
-      }
-      setWelcome(from, false)
-      if (typeof reagir === 'function') await reagir('✅')
-      return reply('❄️ *BOAS-VINDAS DESATIVADAS!*\n\nNão enviarei mais mensagens de entrada.')
-    }
-
-    if (sub === 'status' || sub === 'info') {
-      const ativo = isWelcomeEnabled(from) ? '✅ ATIVADO' : '❌ DESATIVADO'
-      return reply(
-        `📊 *STATUS — BOAS-VINDAS*\n\n` +
-          `🔘 Estado: ${ativo}\n\n` +
-          `📌 Comandos:\n` +
-          `▸ \`${prefix}bemvindo on\` — Ativar\n` +
-          `▸ \`${prefix}bemvindo off\` — Desativar\n` +
-          `▸ \`${prefix}bemvindo status\` — Ver status`
-      )
-    }
-
-    // Ajuda / sem argumento
-    const ativo = isWelcomeEnabled(from) ? 'ATIVADO' : 'DESATIVADO'
-    return reply(
-      `🎰 *SISTEMA DE BOAS-VINDAS — LAS VEGAS*\n\n` +
-        `Status atual: *${ativo}*\n\n` +
-        `📌 *Uso:*\n` +
-        `▸ \`${prefix}bemvindo on\` — Ativar no grupo\n` +
-        `▸ \`${prefix}bemvindo off\` — Desativar no grupo\n` +
-        `▸ \`${prefix}bemvindo status\` — Ver status\n\n` +
-        `Quando ativo, novos membros recebem a mensagem temática com foto de perfil (ou imagem aleatória).`
-    )
-  }
+  handleGroupUpdate,
+  sendWelcome,
+  WELCOME_CAPTION
 }
