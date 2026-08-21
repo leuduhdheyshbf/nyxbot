@@ -1,49 +1,7 @@
 'use strict'
 
-const fs = require('fs')
-const path = require('path')
-
-const ROOT = path.join(__dirname, '..', '..', '..')
-const WELCOME_PATH = path.join(ROOT, 'database', 'json', 'welcome.json')
-
-function ensureWelcomeFile() {
-  const dir = path.dirname(WELCOME_PATH)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    if (!fs.existsSync(WELCOME_PATH)) {
-      fs.writeFileSync(WELCOME_PATH, JSON.stringify({ groups: [] }, null, 2))
-    }
-}
-
-function loadWelcome() {
-  ensureWelcomeFile()
-  try {
-    const data = JSON.parse(fs.readFileSync(WELCOME_PATH, 'utf8'))
-    if (Array.isArray(data)) return { groups: data }
-    return { groups: Array.isArray(data.groups) ? data.groups : [] }
-  } catch {
-    return { groups: [] }
-  }
-}
-
-function saveWelcome(data) {
-  ensureWelcomeFile()
-  fs.writeFileSync(WELCOME_PATH, JSON.stringify(data, null, 2))
-}
-
-function isWelcomeEnabled(groupId) {
-  const data = loadWelcome()
-  return data.groups.includes(groupId)
-}
-
-function setWelcome(groupId, enabled) {
-  const data = loadWelcome()
-  if (enabled) {
-    if (!data.groups.includes(groupId)) data.groups.push(groupId)
-  } else {
-    data.groups = data.groups.filter((g) => g !== groupId)
-  }
-  saveWelcome(data)
-}
+// Importa o banco de dados (Supabase + JSON fallback)
+const db = require('../../core/database')
 
 module.exports = {
   name: 'bemvindo',
@@ -52,10 +10,79 @@ module.exports = {
   category: 'admin',
   aliases: ['boasvindas', 'welcome'],
 
-  // Exportado para o handler de grupo
-  isWelcomeEnabled,
-  setWelcome,
-  loadWelcome,
+  // ============================================
+  // FUNÇÕES AUXILIARES (Exportadas para o groupUpdateHandler)
+  // ============================================
+
+  async isWelcomeEnabled(groupId) {
+    try {
+      // Lê do Supabase
+      const { data, error } = await db.supabase
+      .from('boas_vindas')
+      .select('*')
+      .eq('group_id', groupId)
+      .maybeSingle()
+
+      if (error) {
+        console.error('[BemVindo] Erro no Supabase:', error.message)
+        // Fallback: tenta ler do JSON local
+        const local = require('fs').existsSync('./database/json/welcome.json') ?
+        JSON.parse(require('fs').readFileSync('./database/json/welcome.json', 'utf8')) : { groups: [] }
+        return local.groups.includes(groupId)
+      }
+
+      return data ? data.ativo === true : false
+    } catch (err) {
+      console.error('[BemVindo] Erro inesperado:', err.message)
+      return false
+    }
+  },
+
+  async setWelcome(groupId, enabled) {
+    try {
+      // Salva no Supabase
+      const { error } = await db.supabase
+      .from('boas_vindas')
+      .upsert(
+        { group_id: groupId, ativo: enabled },
+        { onConflict: 'group_id' }
+      )
+
+      if (error) {
+        console.error('[BemVindo] Erro ao salvar no Supabase:', error.message)
+        // Fallback: salva no JSON local
+        const local = require('fs').existsSync('./database/json/welcome.json') ?
+        JSON.parse(require('fs').readFileSync('./database/json/welcome.json', 'utf8')) : { groups: [] }
+        if (enabled) {
+          if (!local.groups.includes(groupId)) local.groups.push(groupId)
+        } else {
+          local.groups = local.groups.filter((g) => g !== groupId)
+        }
+        require('fs').writeFileSync('./database/json/welcome.json', JSON.stringify(local, null, 2))
+        return
+      }
+    } catch (err) {
+      console.error('[BemVindo] Erro inesperado ao salvar:', err.message)
+    }
+  },
+
+  async loadWelcome() {
+    try {
+      const { data, error } = await db.supabase
+      .from('boas_vindas')
+      .select('*')
+      .eq('ativo', true)
+
+      if (error) {
+        console.error('[BemVindo] Erro ao ler lista:', error.message)
+        return []
+      }
+      return data ? data.map((r) => r.group_id) : []
+    } catch (err) {
+      console.error('[BemVindo] Erro inesperado:', err.message)
+      return []
+    }
+  },
 
   async execute({ client, from, info, args, reply, isAdm, isDono, isGroup, prefix, reagir }) {
     if (!isGroup) {
@@ -67,33 +94,46 @@ module.exports = {
 
     const sub = (args[0] || '').toLowerCase()
 
+    // ============================================
+    // ATIVAR
+    // ============================================
     if (sub === 'on' || sub === '1' || sub === 'ativar') {
-      if (isWelcomeEnabled(from)) {
+      const isOn = await this.isWelcomeEnabled(from)
+      if (isOn) {
         return reply('🎰 O sistema de boas-vindas já está *ATIVADO* neste grupo!')
       }
-      setWelcome(from, true)
+      await this.setWelcome(from, true)
       if (typeof reagir === 'function') await reagir('✅')
         return reply(
           `🎰 *BOAS-VINDAS ATIVADAS!*\n\n` +
           `Quando um novo membro entrar, o bot enviará a mensagem de Las Vegas com a foto de perfil.\n\n` +
+          `✅ *Salvo no Supabase!* Mesmo se o bot reiniciar, continuará ativo.\n` +
           `Use \`${prefix}bemvindo off\` para desativar.`
         )
     }
 
+    // ============================================
+    // DESATIVAR
+    // ============================================
     if (sub === 'off' || sub === '0' || sub === 'desativar') {
-      if (!isWelcomeEnabled(from)) {
+      const isOn = await this.isWelcomeEnabled(from)
+      if (!isOn) {
         return reply('❄️ O sistema de boas-vindas já está *DESATIVADO* neste grupo!')
       }
-      setWelcome(from, false)
+      await this.setWelcome(from, false)
       if (typeof reagir === 'function') await reagir('✅')
         return reply('❄️ *BOAS-VINDAS DESATIVADAS!*\n\nNão enviarei mais mensagens de entrada.')
     }
 
+    // ============================================
+    // STATUS
+    // ============================================
     if (sub === 'status' || sub === 'info') {
-      const ativo = isWelcomeEnabled(from) ? '✅ ATIVADO' : '❌ DESATIVADO'
+      const ativo = await this.isWelcomeEnabled(from) ? '✅ ATIVADO' : '❌ DESATIVADO'
       return reply(
         `📊 *STATUS — BOAS-VINDAS*\n\n` +
         `🔘 Estado: ${ativo}\n\n` +
+        `✅ *Salvo no Supabase, não se perde ao reiniciar!*\n\n` +
         `📌 Comandos:\n` +
         `▸ \`${prefix}bemvindo on\` — Ativar\n` +
         `▸ \`${prefix}bemvindo off\` — Desativar\n` +
@@ -101,10 +141,14 @@ module.exports = {
       )
     }
 
-    const ativo = isWelcomeEnabled(from) ? 'ATIVADO' : 'DESATIVADO'
+    // ============================================
+    // AJUDA
+    // ============================================
+    const ativo = await this.isWelcomeEnabled(from) ? 'ATIVADO' : 'DESATIVADO'
     return reply(
       `🎰 *SISTEMA DE BOAS-VINDAS — LAS VEGAS*\n\n` +
       `Status atual: *${ativo}*\n\n` +
+      `✅ *Salvo no Supabase, não se perde ao reiniciar!*\n\n` +
       `📌 *Uso:*\n` +
       `▸ \`${prefix}bemvindo on\` — Ativar no grupo\n` +
       `▸ \`${prefix}bemvindo off\` — Desativar no grupo\n` +
