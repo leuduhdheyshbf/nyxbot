@@ -282,7 +282,7 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                 }
 
                 // =========================================================
-                // ANTILINK CORRIGIDO
+                // ANTILINK CORRIGIDO E FUNCIONAL
                 // =========================================================
                 if (ctx.isGroup && !ctx.isAdmin) {
                   const antilinkOn = typeof db.getGroupFeature === 'function'
@@ -304,32 +304,27 @@ async function handleMessage(upsert, sock, { config, cmdManager }) {
                       return
                     }
 
-                    // CORREÇÃO: Primeiro tenta APAGAR o link, depois avisa
+                    // CORREÇÃO: Forma correta de deletar no Baileys
                     try {
-                      // 1. Tenta apagar a mensagem com o link
-                      await sock.sendMessage(ctx.from, { delete: info.key })
+                      // 1. Tenta apagar a mensagem com o objeto delete correto
+                      await sock.sendMessage(ctx.from, {
+                        delete: {
+                          remoteJid: ctx.from,
+                          fromMe: false,
+                          id: info.key.id,
+                          participant: info.key.participant || info.key.participantAlt || ctx.sender
+                        }
+                      });
 
                       // 2. Só DEPOIS de apagar com sucesso, envia o aviso
                       try {
                         await sock.sendMessage(ctx.from, { text: '🔗 Link removido (antilink).' })
                       } catch {
-                        // Se falhar ao enviar o aviso, ignora (o link já foi apagado)
+                        // Se falhar ao enviar o aviso, ignora
                       }
 
                     } catch (e) {
-                      // 3. Se a primeira tentativa de apagar falhar, tenta um fallback
-                      try {
-                        await sock.sendMessage(ctx.from, {
-                          delete: {
-                            remoteJid: ctx.from,
-                            fromMe: false,
-                            id: info.key.id,
-                            participant: info.key.participant || info.key.participantAlt || ctx.sender
-                          }
-                        })
-                      } catch (e2) {
-                        RedLog(`antilink delete: ${e2.message || e.message}`)
-                      }
+                      RedLog(`antilink delete: ${e.message}`);
                     }
 
                     return // Garante que o fluxo pare depois de processar o antilink
