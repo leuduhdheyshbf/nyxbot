@@ -103,29 +103,70 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
   })
 
   // ============================================
-  // ✅ WELCOME - VERSÃO CORRIGIDA (CAPTURA TUDO)
+  // 🔥 WELCOME - MÉTODO GARANTIDO (com polling)
   // ============================================
   if (typeof onGroupUpdate === 'function') {
-    // Evento 1: group-participants.update
+    // Evento 1: group-participants.update (padrão)
     sock.ev.on('group-participants.update', (ev) => {
       console.log('[CLIENT] group-participants.update:', ev?.action, ev?.participants?.length)
       onGroupUpdate(ev, sock)
     })
 
-    // Evento 2: groups.update (FALLBACK - captura entradas via link)
+    // Evento 2: groups.update (fallback)
     sock.ev.on('groups.update', async (updates) => {
       for (const update of updates) {
         if (update.participants && update.participants.length > 0) {
-          console.log('[CLIENT] groups.update capturado!', update.participants.length, 'participantes')
+          console.log('[CLIENT] groups.update capturado!')
           const formatted = {
             id: update.id,
             action: 'add',
-            participants: update.participants
+            participants: update.participants.map(p => p.id || p)
           }
           await onGroupUpdate(formatted, sock)
         }
       }
     })
+
+    // 🔥 Evento 3: POLLING - verifica a cada 5 segundos (MATA-PAU)
+    const gruposMonitorados = new Set()
+
+    setInterval(async () => {
+      try {
+        const groups = await sock.groupFetchAllParticipating()
+        for (const [groupId, group] of Object.entries(groups)) {
+          if (!gruposMonitorados.has(groupId)) {
+            gruposMonitorados.add(groupId)
+            // Pega os participantes atuais
+            const currentMembers = new Set(group.participants.map(p => p.id))
+
+            // Verifica a cada 10s se mudou
+            let lastMembers = new Set(currentMembers)
+
+            setInterval(async () => {
+              try {
+                const freshGroup = await sock.groupMetadata(groupId)
+                const newMembers = new Set(freshGroup.participants.map(p => p.id))
+
+                // Encontra quem entrou
+                for (const member of newMembers) {
+                  if (!lastMembers.has(member)) {
+                    console.log(`[POLLING] Novo membro detectado: ${member}`)
+                    await onGroupUpdate({
+                      id: groupId,
+                      action: 'add',
+                      participants: [{ id: member }]
+                    }, sock)
+                  }
+                }
+                lastMembers = newMembers
+              } catch (e) {}
+            }, 10000) // Verifica a cada 10s
+          }
+        }
+      } catch (e) {
+        console.log('[POLLING] Erro:', e.message)
+      }
+    }, 30000) // Atualiza grupos a cada 30s
   }
 
   return sock

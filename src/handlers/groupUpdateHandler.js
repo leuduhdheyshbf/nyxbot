@@ -66,6 +66,8 @@ function getDefaultImageBuffer() {
 
 async function sendWelcome(sock, groupId, participantJid) {
   try {
+    console.log(`📤 Enviando welcome para ${participantJid}`)
+
     const imageUrl = await getProfilePictureUrl(sock, participantJid)
     let buffer = null
     let usedFallback = false
@@ -95,21 +97,17 @@ async function sendWelcome(sock, groupId, participantJid) {
       })
     }
 
-    CyanLog(
-      `✅ Welcome enviado para ${participantJid}` +
-      (usedFallback ? ' (imagem padrão)' : ' (foto de perfil)')
-    )
+    console.log(`✅ Welcome enviado para ${participantJid}`)
+    CyanLog(`✅ Welcome enviado para ${participantJid}`)
   } catch (err) {
+    console.error(`❌ Erro no sendWelcome: ${err.message}`)
     RedLog(`sendWelcome: ${err.message}`)
   }
 }
 
-// ============================================
-// ✅ HANDLER CORRIGIDO - ACEITA QUALQUER FORMATO
-// ============================================
 async function handleGroupUpdate(update, sock) {
   try {
-    console.log('[HANDLER] Update recebido:', update?.action, update?.participants?.length || 0)
+    console.log('[HANDLER] Update recebido:', JSON.stringify(update, null, 2))
 
     if (!update || !update.id) {
       console.log('[HANDLER] Sem ID, ignorando')
@@ -120,19 +118,21 @@ async function handleGroupUpdate(update, sock) {
     let action = update.action
     let participants = update.participants || []
 
-    // 🔥 CORREÇÃO: Se veio do groups.update, action pode vir vazio
+    // 🔥 Normaliza participantes
+    if (participants.length > 0) {
+      if (typeof participants[0] === 'string') {
+        participants = participants.map(p => ({ id: p }))
+      } else if (participants[0]?.id) {
+        // já está certo
+      } else if (participants[0]?.phoneNumber) {
+        participants = participants.map(p => ({ id: p.phoneNumber }))
+      }
+    }
+
+    // Se não veio action, força como 'add'
     if (!action && participants.length > 0) {
       action = 'add'
       console.log('[HANDLER] Action forçada para "add"')
-    }
-
-    // 🔥 CORREÇÃO: Normaliza os participantes
-    if (participants.length > 0 && typeof participants[0] === 'string') {
-      participants = participants.map(p => ({ id: p }))
-    }
-
-    if (participants.length > 0 && participants[0]?.id) {
-      // já está no formato certo
     }
 
     console.log(`[HANDLER] Grupo: ${groupId}, Ação: ${action}, Participantes: ${participants.length}`)
@@ -147,6 +147,7 @@ async function handleGroupUpdate(update, sock) {
       return
     }
 
+    // 🔥 Verifica se o welcome está ativo
     if (!isWelcomeEnabled(groupId)) {
       console.log('[HANDLER] Welcome desativado para este grupo')
       return
