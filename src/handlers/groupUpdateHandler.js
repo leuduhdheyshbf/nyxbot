@@ -11,9 +11,9 @@ const DEFAULT_IMAGE_PATH = path.join(__dirname, '..', 'assets', 'welcome-default
 function isWelcomeEnabled(groupId) {
   try {
     if (!fs.existsSync(WELCOME_PATH)) return false
-    const data = JSON.parse(fs.readFileSync(WELCOME_PATH, 'utf8'))
-    const groups = Array.isArray(data) ? data : data.groups || []
-    return groups.includes(groupId)
+      const data = JSON.parse(fs.readFileSync(WELCOME_PATH, 'utf8'))
+      const groups = Array.isArray(data) ? data : data.groups || []
+      return groups.includes(groupId)
   } catch {
     return false
   }
@@ -33,10 +33,6 @@ const WELCOME_CAPTION = `🎰 *BEM-VINDO A LAS VEGAS* 🎰
 💰 *A mesa está aberta.*
 ♠️ *Nyx Bot te dá as boas-vindas.*`
 
-/**
- * Tenta obter a URL da foto de perfil do usuário.
- * Retorna null se não tiver ou der erro.
- */
 async function getProfilePictureUrl(sock, jid) {
   try {
     const url = await sock.profilePictureUrl(jid, 'image')
@@ -46,9 +42,6 @@ async function getProfilePictureUrl(sock, jid) {
   }
 }
 
-/**
- * Baixa a imagem como buffer (melhor compatibilidade no Baileys).
- */
 async function downloadImageBuffer(url) {
   try {
     const res = await axios.get(url, {
@@ -62,9 +55,6 @@ async function downloadImageBuffer(url) {
   }
 }
 
-/**
- * Carrega a imagem padrão local (selfie dos gatos).
- */
 function getDefaultImageBuffer() {
   try {
     if (fs.existsSync(DEFAULT_IMAGE_PATH)) {
@@ -74,9 +64,6 @@ function getDefaultImageBuffer() {
   return null
 }
 
-/**
- * Envia a mensagem de boas-vindas para um participante que entrou.
- */
 async function sendWelcome(sock, groupId, participantJid) {
   try {
     const imageUrl = await getProfilePictureUrl(sock, participantJid)
@@ -87,7 +74,6 @@ async function sendWelcome(sock, groupId, participantJid) {
       buffer = await downloadImageBuffer(imageUrl)
     }
 
-    // Sem foto de perfil ou falha no download → imagem padrão (gatos)
     if (!buffer) {
       buffer = getDefaultImageBuffer()
       usedFallback = true
@@ -103,7 +89,6 @@ async function sendWelcome(sock, groupId, participantJid) {
         mentions: [participantJid]
       })
     } else {
-      // último recurso: só texto
       await sock.sendMessage(groupId, {
         text: caption,
         mentions: [participantJid]
@@ -111,45 +96,79 @@ async function sendWelcome(sock, groupId, participantJid) {
     }
 
     CyanLog(
-      `Boas-vindas enviada em ${groupId} para ${participantJid}` +
-        (usedFallback ? ' (imagem padrão)' : ' (foto de perfil)')
+      `✅ Welcome enviado para ${participantJid}` +
+      (usedFallback ? ' (imagem padrão)' : ' (foto de perfil)')
     )
   } catch (err) {
     RedLog(`sendWelcome: ${err.message}`)
   }
 }
 
-/**
- * Handler do evento group-participants.update do Baileys.
- */
+// ============================================
+// ✅ HANDLER CORRIGIDO - ACEITA QUALQUER FORMATO
+// ============================================
 async function handleGroupUpdate(update, sock) {
   try {
-    if (!update || !update.id) return
+    console.log('[HANDLER] Update recebido:', update?.action, update?.participants?.length || 0)
+
+    if (!update || !update.id) {
+      console.log('[HANDLER] Sem ID, ignorando')
+      return
+    }
 
     const groupId = update.id
-    const action = update.action
-    const participants = update.participants || []
+    let action = update.action
+    let participants = update.participants || []
 
-    // Só processa entrada de novos membros
-    if (action !== 'add') return
-    if (!participants.length) return
+    // 🔥 CORREÇÃO: Se veio do groups.update, action pode vir vazio
+    if (!action && participants.length > 0) {
+      action = 'add'
+      console.log('[HANDLER] Action forçada para "add"')
+    }
 
-    // Verifica se o sistema está ativo neste grupo
-    if (!isWelcomeEnabled(groupId)) return
+    // 🔥 CORREÇÃO: Normaliza os participantes
+    if (participants.length > 0 && typeof participants[0] === 'string') {
+      participants = participants.map(p => ({ id: p }))
+    }
+
+    if (participants.length > 0 && participants[0]?.id) {
+      // já está no formato certo
+    }
+
+    console.log(`[HANDLER] Grupo: ${groupId}, Ação: ${action}, Participantes: ${participants.length}`)
+
+    if (action !== 'add') {
+      console.log(`[HANDLER] Ação não é "add" (${action}), ignorando`)
+      return
+    }
+
+    if (!participants.length) {
+      console.log('[HANDLER] Sem participantes, ignorando')
+      return
+    }
+
+    if (!isWelcomeEnabled(groupId)) {
+      console.log('[HANDLER] Welcome desativado para este grupo')
+      return
+    }
+
+    console.log('[HANDLER] ✅ Welcome ATIVO! Enviando...')
 
     for (const p of participants) {
-      const jid = typeof p === 'string' ? p : p?.id || p?.jid || p?.phoneNumber
+      const jid = p?.id || p?.jid || p?.phoneNumber || p
       if (!jid || jid.endsWith('@g.us')) continue
 
-      // Evita boas-vindas para o próprio bot
-      const botId = sock.user?.id || ''
-      if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
-        continue
-      }
+        const botId = sock.user?.id || ''
+        if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
+          console.log('[HANDLER] É o bot, ignorando')
+          continue
+        }
 
-      await sendWelcome(sock, groupId, jid)
+        console.log(`[HANDLER] Enviando welcome para ${jid}`)
+        await sendWelcome(sock, groupId, jid)
     }
   } catch (err) {
+    console.error('[HANDLER] Erro:', err.message)
     RedLog(`handleGroupUpdate: ${err.message}`)
   }
 }

@@ -25,7 +25,7 @@ ensureDir(AUTH_DIR)
 ensureDir(path.join(ROOT, 'temp'))
 
 let isReconnecting = false
-let sockGlobal = null // <-- Variável global para salvar o socket
+let sockGlobal = null
 
 async function startConnection({ onMessage, onGroupUpdate, config }) {
   if (isReconnecting) {
@@ -54,7 +54,7 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
                             getMessage: async () => undefined
   })
 
-  sockGlobal = sock // <-- Salva o socket na variável global
+  sockGlobal = sock
 
   if (usePairingCode && !sock.authState.creds.registered) {
     const phone = config.NumeroDoDono?.replace(/\D/g, '')
@@ -102,14 +102,35 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
     }
   })
 
+  // ============================================
+  // ✅ WELCOME - VERSÃO CORRIGIDA (CAPTURA TUDO)
+  // ============================================
   if (typeof onGroupUpdate === 'function') {
-    sock.ev.on('group-participants.update', (ev) => onGroupUpdate(ev, sock))
+    // Evento 1: group-participants.update
+    sock.ev.on('group-participants.update', (ev) => {
+      console.log('[CLIENT] group-participants.update:', ev?.action, ev?.participants?.length)
+      onGroupUpdate(ev, sock)
+    })
+
+    // Evento 2: groups.update (FALLBACK - captura entradas via link)
+    sock.ev.on('groups.update', async (updates) => {
+      for (const update of updates) {
+        if (update.participants && update.participants.length > 0) {
+          console.log('[CLIENT] groups.update capturado!', update.participants.length, 'participantes')
+          const formatted = {
+            id: update.id,
+            action: 'add',
+            participants: update.participants
+          }
+          await onGroupUpdate(formatted, sock)
+        }
+      }
+    })
   }
 
   return sock
 }
 
-// Função para retornar o socket global
 function getSock() {
   return sockGlobal
 }
