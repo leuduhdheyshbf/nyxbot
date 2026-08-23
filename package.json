@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "start:code": "node src/index.js --code",
-    "postinstall": "node scripts/prepare-dockhosting.js"
+    "postinstall": "echo 'Postinstall ignorado para Render'"
   },
   "author": "LCSX / Nyx V2",
   "license": "MIT",
@@ -43,11 +43,5 @@
     "youtubei.js": "^18.0.0",
     "yt-search": "2.10.4",
     "zod": "3.25.76"
-  },
-  "allowScripts": {
-    "@whiskeysockets/baileys@7.0.0-rc14": true,
-    "protobufjs@7.6.5": true,
-    "es5-ext@0.10.64": true,
-    "canvas@3.2.3": true
   }
 }
