@@ -1,0 +1,22 @@
+{
+  "prefix": ".",
+  "NomeDoBot": "Nyx Bot",
+  "NomeDoDono": "LCSX",
+  "NumeroDoDono": "",
+  "packname": "Nyx Stickers",
+  "author": "LCSX",
+  "cooldownPadrao": 3,
+  "moeda": {
+    "nome": "NyxCoins",
+    "simbolo": "🩸",
+    "dailyMin": 50,
+    "dailyMax": 150,
+    "xpPorMensagem": 5,
+    "xpPorComando": 10
+  },
+  "niveis": {
+    "xpBase": 100,
+    "multiplicador": 1.35
+  },
+  "tempCleanupMinutes": 30
+}
