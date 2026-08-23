@@ -1,6 +1,9 @@
 FROM node:22-slim
 
-# Instala todas as dependências de sistema
+# Aumenta o limite de arquivos
+RUN echo "fs.file-max = 65536" >> /etc/sysctl.conf
+
+# Instala dependências
 RUN apt-get update && apt-get install -y \
     build-essential \
     libcairo2-dev \
