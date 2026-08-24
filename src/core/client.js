@@ -48,10 +48,13 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
       keys: makeCacheableSignalKeyStore(state.keys, logger)
     },
     browser: ['Nyx Bot', 'Chrome', '120.0.0.0'],
-                            msgRetryCounterCache,
-                            syncFullHistory: false,
-                            generateHighQualityLinkPreview: true,
-                            getMessage: async () => undefined
+    msgRetryCounterCache,
+    syncFullHistory: false,
+    generateHighQualityLinkPreview: true,
+    getMessage: async () => undefined,
+                            connectTimeoutMs: 60000,
+                            defaultQueryTimeoutMs: 60000,
+                              keepAliveIntervalMs: 30000
   })
 
   sockGlobal = sock
@@ -84,9 +87,23 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
     }
     if (connection === 'close') {
       const status = new Boom(lastDisconnect?.error)?.output?.statusCode
+
+      // Se for 440 ou 401, limpa a sessão e reconecta
+      if (status === 440 || status === 401) {
+        RedLog(`❌ Erro ${status}: limpando sessão...`)
+        try {
+          fs.rmSync(AUTH_DIR, { recursive: true, force: true })
+          fs.mkdirSync(AUTH_DIR, { recursive: true })
+          RedLog('🧹 Sessão limpa! Reconectando...')
+        } catch (e) {
+          RedLog('Erro ao limpar sessão:', e.message)
+        }
+      }
+
       const shouldReconnect = status !== DisconnectReason.loggedOut
       RedLog(`Conexão fechada (${status}). Reconectar: ${shouldReconnect}`)
       isReconnecting = false
+
       if (shouldReconnect) {
         setTimeout(() => startConnection({ onMessage, onGroupUpdate, config }), 3000)
       } else {
@@ -103,9 +120,6 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
     }
   })
 
-  // ============================================
-  // ✅ SOMENTE group-participants.update (SEM groups.update)
-  // ============================================
   if (typeof onGroupUpdate === 'function') {
     sock.ev.on('group-participants.update', (ev) => {
       console.log('[CLIENT] group-participants.update:', ev?.action, ev?.participants?.length)
