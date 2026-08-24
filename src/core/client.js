@@ -47,7 +47,7 @@ async function startConnection({ onMessage, onGroupUpdate, config }) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger)
     },
-    browser: Browsers.ubuntu('Chrome'),
+    browser: ['Nyx Bot', 'Chrome', '120.0.0.0'],
                             msgRetryCounterCache,
                             syncFullHistory: false,
                             generateHighQualityLinkPreview: true,
