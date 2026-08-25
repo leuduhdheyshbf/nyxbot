@@ -1,5 +1,4 @@
 node_modules/
-database/Nyx-QR/
 database/backups/
 temp/*
 !temp/.gitkeep
