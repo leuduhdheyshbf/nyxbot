@@ -5,7 +5,7 @@
  *
  * Tabelas Supabase:
  *   users, premium_users, donos, bot_features,
- *   warns, mutes, afk, group_prefixes, active_groups
+ *   warns, mutes, afk, group_prefixes, active_groups, group_blacklist
  *
  * getUser/saveUser e isPremium continuam síncronos (cache).
  */

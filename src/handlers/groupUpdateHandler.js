@@ -5,6 +5,7 @@ const path = require('path')
 const axios = require('axios')
 const { RedLog, CyanLog } = require('../core/logger')
 const db = require('../core/database')
+const { isBlacklisted } = require('../utils/blacklist')
 
 const DEFAULT_IMAGE_PATH = path.join(__dirname, '..', 'assets', 'welcome-default.jpeg')
 
@@ -138,18 +139,8 @@ async function handleGroupUpdate(update, sock) {
       let action = update.action
       let participants = update.participants || []
 
-      // Opcionalmente limite o welcome a um grupo específico.
-      // Sem WELCOME_GROUP_ID, o recurso funciona em qualquer grupo habilitado no Supabase.
-      const targetGroup = process.env.WELCOME_GROUP_ID?.trim()
-      if (targetGroup && groupId !== targetGroup) {
-        return
-      }
-
-      // 🔥 EVITA PROCESSAR O MESMO GRUPO VÁRIAS VEZES
-      if (processedGroups.has(groupId)) {
-        console.log(`⏭️ [IGNORADO] Grupo ${groupId} já foi processado`)
-        return
-      }
+      // A blacklist é independente do sistema de boas-vindas.
+      // Não use WELCOME_GROUP_ID nem processedGroups para bloquear esta verificação.
 
       // Normaliza participantes
       if (participants.length > 0) {
@@ -169,36 +160,77 @@ async function handleGroupUpdate(update, sock) {
       console.log(`[HANDLER] Grupo: ${groupId}, Ação: ${action}, Participantes: ${participants.length}`)
 
       if (action !== 'add') return
-        if (!participants.length) return
+      if (!participants.length) return
 
-          // 🔥 VERIFICA NO SUPABASE
-          const isActive = await isWelcomeEnabled(groupId)
-          console.log(`[HANDLER] 🎯 Welcome ativo no SUPABASE? ${isActive}`)
+      // ============================================
+      // BLACKLIST — SEMPRE VERIFICADA
+      // ============================================
+      for (const p of participants) {
+        const jid = p?.id || p?.jid || p?.phoneNumber || p
+        if (!jid || jid.endsWith('@g.us')) continue
 
-          if (!isActive) {
-            console.log('[HANDLER] ❌ Welcome desativado no SUPABASE')
-            return
+        const botId = sock.user?.id || ''
+        if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
+          console.log('[HANDLER] É o bot, ignorando blacklist')
+          continue
+        }
+
+        if (await isBlacklisted(groupId, jid)) {
+          console.log(`[BLACKLIST] 🚫 ${jid} tentou entrar em ${groupId}`)
+          try {
+            await sock.groupParticipantsUpdate(groupId, [jid], 'remove')
+            await sock.sendMessage(groupId, {
+              text: `🚫 @${jid.split('@')[0]} está na lista negra permanente deste grupo e foi removido automaticamente.`,
+              mentions: [jid]
+            })
+          } catch (err) {
+            console.error(`[BLACKLIST] Falha ao remover ${jid}: ${err.message}`)
           }
+        }
+      }
 
-          // 🔥 MARCA COMO PROCESSADO
-          processedGroups.add(groupId)
-          setTimeout(() => processedGroups.delete(groupId), 5000)
+      // ============================================
+      // WELCOME — segue suas regras normais
+      // ============================================
+      const targetGroup = process.env.WELCOME_GROUP_ID?.trim()
+      if (targetGroup && groupId !== targetGroup) return
 
-          console.log('[HANDLER] ✅ Welcome ATIVO! Enviando...')
+      const isActive = await isWelcomeEnabled(groupId)
+      console.log(`[HANDLER] 🎯 Welcome ativo no SUPABASE? ${isActive}`)
 
-          for (const p of participants) {
-            const jid = p?.id || p?.jid || p?.phoneNumber || p
-            if (!jid || jid.endsWith('@g.us')) continue
+      if (!isActive) {
+        console.log('[HANDLER] ❌ Welcome desativado no SUPABASE')
+        return
+      }
 
-              const botId = sock.user?.id || ''
-              if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
-                console.log('[HANDLER] É o bot, ignorando')
-                continue
-              }
+      // Evita welcome duplicado sem afetar a blacklist.
+      if (processedGroups.has(groupId)) {
+        console.log(`⏭️ [WELCOME] Grupo ${groupId} já foi processado`)
+        return
+      }
 
-              console.log(`[HANDLER] Enviando welcome para ${jid}`)
-              await sendWelcome(sock, groupId, jid)
-          }
+      processedGroups.add(groupId)
+      setTimeout(() => processedGroups.delete(groupId), 5000)
+
+      console.log('[HANDLER] ✅ Welcome ATIVO! Enviando...')
+
+      for (const p of participants) {
+        const jid = p?.id || p?.jid || p?.phoneNumber || p
+        if (!jid || jid.endsWith('@g.us')) continue
+
+        const botId = sock.user?.id || ''
+        if (botId && (jid === botId || jid.split(':')[0] === botId.split(':')[0])) {
+          console.log('[HANDLER] É o bot, ignorando')
+          continue
+        }
+
+        if (await isBlacklisted(groupId, jid)) {
+          continue
+        }
+
+        console.log(`[HANDLER] Enviando welcome para ${jid}`)
+        await sendWelcome(sock, groupId, jid)
+      }
   } catch (err) {
     console.error('[HANDLER] Erro:', err.message)
   }
