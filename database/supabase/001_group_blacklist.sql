@@ -4,6 +4,7 @@ create table if not exists public.group_blacklist (
   group_id text not null,
   user_jid text not null,
   by_jid text,
+  phone text,
   reason text not null default '',
   created_at timestamptz not null default now(),
   unique (group_id, user_jid)

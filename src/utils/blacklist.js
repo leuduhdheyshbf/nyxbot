@@ -38,6 +38,7 @@ async function addBlacklist(groupId, jid, byJid = null, reason = '') {
       {
         group_id: groupId,
         user_jid: target,
+        phone: target.split('@')[0].split(':')[0].replace(/\D/g, ''),
         by_jid: normalizeJid(byJid),
         reason: String(reason || '').slice(0, 500)
       },
