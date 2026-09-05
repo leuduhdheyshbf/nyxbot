@@ -20,11 +20,17 @@ RUN apt-get update && apt-get install -y \
 # Define o diretório de trabalho dentro do container
 WORKDIR /app
 
+# Copia scripts antes do npm install (para o postinstall rodar corretamente)
+COPY scripts/ ./scripts/
+
 # Copia apenas os arquivos de dependência primeiro (para aproveitar o cache)
 COPY package*.json ./
 
 # Instala as dependências do Node.js (incluindo canvas, sharp, etc.)
 RUN npm install --omit=dev
+
+# Roda o script de preparação do ffmpeg (pós-instalação)
+RUN node scripts/prepare-dockhosting.js || echo 'ffmpeg-prepared' 2>/dev/null || true
 
 # Copia todo o resto do código (exceto o que estiver no .dockerignore)
 COPY . .

@@ -3,7 +3,6 @@ database/backups/
 temp/*
 !temp/.gitkeep
 .env
-ffmpeg
 backups/
 *.log
 logs/
