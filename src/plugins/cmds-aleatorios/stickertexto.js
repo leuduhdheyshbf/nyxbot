@@ -4,6 +4,7 @@ const path = require('path')
 const { tmpdir } = require('os')
 const Crypto = require('crypto')
 const webp = require('node-webpmux')
+const sharp = require('sharp')
 // [NyxFix] require de exif2.js removido (não existe na V2)
 
 function run(cmd) {
@@ -189,7 +190,12 @@ async function svgToPng(svgPath, pngPath) {
     await run(`./ffmpeg -y -i "${svgPath}" -vf "scale=512:512:flags=lanczos,format=rgb24" -frames:v 1 "${pngPath}"`)
   } catch {}
   if (fs.existsSync(pngPath)) return
-  await run(`convert "${svgPath}" -resize 512x512! -background none "${pngPath}"`)
+  // fallback: sharp (não precisa de imagemagick)
+  try {
+    await sharp(svgPath).resize(512, 512, { fit: 'fill' }).png().toFile(pngPath)
+  } catch (e) {
+    throw new Error(`Falha ao converter SVG → PNG: ${e.message}`)
+  }
 }
 
 /** Gera frames da animação — sempre preenche progressivamente o texto */
@@ -315,7 +321,9 @@ Ex:
           } catch {}
         }
         if (!fs.existsSync(pngPath)) {
-          await run(`convert -background "${bg}" -flatten "${svgPath}" -resize 512x512! "${pngPath}"`)
+          try {
+            await sharp(svgPath).resize(512, 512, { fit: 'fill', background: bg }).png().toFile(pngPath)
+          } catch {}
         }
         if (!fs.existsSync(pngPath)) throw new Error('Falha no frame ' + i)
       }
