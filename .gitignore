@@ -5,3 +5,6 @@ temp/*
 .env
 ffmpeg
 backups/
+*.log
+logs/
+*.txt
