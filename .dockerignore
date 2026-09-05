@@ -1,5 +1,12 @@
 node_modules
+npm-debug.log
 .git
 .gitignore
-*.log
 .env
+temp
+database/*.db
+*.log
+*.webp
+*.mp4
+*.txt
+.DS_Store
