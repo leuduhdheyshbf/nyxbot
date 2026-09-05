@@ -257,9 +257,14 @@ async function flushUsersSupabase() {
     userDirty.clear()
     const rows = jids.map((j) => userCache.get(j)).filter(Boolean).map(userToRow)
     if (!rows.length) return
-      const { error } = await supabase.from('users').upsert(rows, { onConflict: 'jid' })
-      if (error) {
-        RedLog(`[Supabase] users flush: ${error.message}`)
+      try {
+        const { error } = await supabase.from('users').upsert(rows, { onConflict: 'jid' })
+        if (error) {
+          RedLog(`[Supabase] users flush: ${error.message}`)
+          for (const j of jids) userDirty.add(j)
+        }
+      } catch (e) {
+        RedLog(`[Supabase] users flush error: ${e.message?.substring(0, 100)}`)
         for (const j of jids) userDirty.add(j)
       }
 }
