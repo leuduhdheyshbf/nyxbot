@@ -1,5 +1,5 @@
-# Usa a imagem oficial Node.js 18 LTS (leve e compatível)
-FROM node:18-slim
+# Usa a imagem oficial Node.js 20 LTS (necessário para @whiskeysockets/baileys e undici)
+FROM node:20-slim
 
 # Instala dependências de sistema necessárias:
 # - ffmpeg (para conversão de vídeos/áudios)
