@@ -1,5 +1,5 @@
-# Usa a imagem oficial Node.js 20 LTS (necessário para @whiskeysockets/baileys e undici)
-FROM node:20-slim
+# Usa a imagem oficial Node.js 22 LTS (necessário para @supabase/supabase-js WebSocket nativo)
+FROM node:22-slim
 
 # Instala dependências de sistema necessárias:
 # - ffmpeg (para conversão de vídeos/áudios)
