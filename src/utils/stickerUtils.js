@@ -128,25 +128,24 @@ async function videoToStickerBuffer(inputBuffer, mode = 'normal') {
   } else {
     vf = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=12'
   }
-  vf += ',split[a][b];[a]palettegen=reserve_transparent=on:transparency_color=ffffff[p];[b][p]paletteuse'
+  // Sem palettegen pra ser 7x mais rápido (transparente não essencial em bots)
 
   try {
-    // timeout aumentado + compression_level 0 pra encoding mais rápido
     await execFileAsync(
       'ffmpeg',
       ['-y', '-i', inFile, '-vcodec', 'libwebp', '-vf', vf, '-loop', '0', '-an', '-t', '8', '-compression_level', '0', outFile],
-      { timeout: 60000 }
+      { timeout: 30000 }
     )
     const stats = fs.statSync(outFile)
     if (stats.size < 500) throw new Error('Webp muito pequeno (' + stats.size + ' bytes)')
     return fs.readFileSync(outFile)
   } catch (e) {
-    // fallback: tenta converter em PNG sequência → animação
+    // fallback: frame único PNG
     const pngOut = tmp('png')
     try {
       await execFileAsync(
         'ffmpeg',
-        ['-y', '-i', inFile, '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=12', '-frames:v', '1', pngOut],
+        ['-y', '-i', inFile, '-vf', vf, '-frames:v', '1', pngOut],
         { timeout: 30000 }
       )
       return fs.readFileSync(pngOut)
